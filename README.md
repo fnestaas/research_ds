@@ -28,17 +28,29 @@ Constant norm of state: unclear why this should help, also impossible with linea
 
 ## Time table (tentative):
 W01:	Read and understand the papers, also further literature, make github
+
 W02:	Implement NODEs, familiarize yourself with JAX
+
 W03:	Implement ODE2ODE
+
 W04:	Implement ODE2ODE / investigate the gradients, compare to other (reported) methods
+
 W05:	slack
+
 W06:	Explore novel methods, either self made or in the literature
+
 W07:	Explore novel methods, either self made or in the literature
+
 W08:	Implement some of those methods, compare performance to ODE2ODE
+
 W09:	slack
+
 W10:	Report / slack
+
 W11:	Report
+
 W12:	Report / presentation
+
 W13:	Presentation
 
 
