@@ -1,0 +1,33 @@
+This week:
+Made proposal, impossibility-proof, schedule, github, installed libraries
+Read papers again, understand NODEs better
+Critical evaluation of approach taken in Ode2Ode; they would seemingly only indirectly solve the problem
+First approach to releaving the exploding/vanishing gradient issue
+
+Would have liked to do:
+Read more secondary literature
+Work more on novel methods (installation took too long)
+See if there is some connection to control systems "regulating the gradients"
+
+Questions:
+How much sense does it actually make to control \norm{x(t)}? We are after all interested in \theta, right?
+- A lot; then the initial state can be found again
+How is the end state used for classification exactly? Dim(input) = Dim(output). Do we attach some matrix/select only some elements?
+Meetings always Thursdays at 10? Works for me, just wondering about the location
+
+Next week:
+Play around with Diffrax, JAX
+Continue working on novel methods
+Check wandb, monitor gradients (of ODE2ODE)
+Stiffness regularization: NNs w cheat differential operators, learning DEs that are easy to solve (read before implementing anything)
+Look into Euler cluster
+
+Euler:
+Getting files to Euler: use git
+scratch: more space but gets deleted regularly
+home: 10k files, ~10 Gb
+"bsub" queue script, -W {time limit}, -R ['{request}']
+
+Metrics:
+NFE fwd/bckw
+Magnitude of states/gradients
