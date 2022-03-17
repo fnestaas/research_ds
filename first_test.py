@@ -13,19 +13,21 @@ import matplotlib.pyplot as plt
 import optax
 
 class IsoODE(eqx.Module):
-    Q: jnp.ndarray 
-    N: jnp.ndarray 
+    _Q: jnp.ndarray 
+    _N: jnp.ndarray 
     d: int
 
     def __init__(self, d, key=None, std=1, mean=0, **kwargs):
         super().__init__(**kwargs)
-        self.Q = mean + std*jrandom.normal(key=key, shape=(d, d))
-        self.N = mean + std*jrandom.normal(key=key, shape=(d, d))
+        self._Q = mean + std*jrandom.normal(key=key, shape=(d, d))
+        self._N = mean + std*jrandom.normal(key=key, shape=(d, d))
         self.d = d
 
     def __call__(self, W):
-        A = jnp.matmul(jnp.transpose(W), jnp.matmul(self.Q, W))
-        return A*self.N - jnp.transpose(A * self.N)
+        Q = jnp.matmul(jnp.transpose(self._Q), self._Q)
+        N = jnp.matmul(jnp.transpose(self._N), self._N)
+        A = jnp.matmul(jnp.transpose(W), jnp.matmul(Q, W))
+        return A * N - jnp.transpose(A * N)
 
 class DynX():
     def __init__(self) -> None:
@@ -102,6 +104,7 @@ def dataloader(arrays, batch_size, *, key):
     dataset_size, n_timestamps, n_dim = arrays[0].shape
     assert all(array.shape[0] == dataset_size for array in arrays)
     indices = jnp.arange(dataset_size)
+    cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
     while True:
         perm = jrandom.permutation(key, indices)
         (key,) = jrandom.split(key, 1)
@@ -109,7 +112,7 @@ def dataloader(arrays, batch_size, *, key):
         end = batch_size
         while end < dataset_size:
             batch_perm = perm[start:end]
-            yield tuple(jnp.concatenate([array[batch_perm], jnp.ones(shape=(batch_size, n_timestamps, n_dim**2))], axis=-1) for array in arrays)
+            yield tuple(jnp.concatenate([array[batch_perm], cat], axis=-1) for array in arrays)
             start = end
             end = start + batch_size
 
@@ -166,7 +169,7 @@ def main(
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.ones(shape=(4, ))]))
+        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.array([1, 0, 0, 1])]))
         plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
         plt.plot(ts, model_y[:, 1], c="crimson")
         plt.legend()
