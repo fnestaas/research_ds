@@ -48,6 +48,7 @@ class Func(eqx.Module):
         self.f = f
 
     def __call__(self, t, y, args):
+        
         x = y[:self.d]
         W = jnp.reshape(y[self.d:], newshape=(self.d, self.d))
         return jnp.concatenate([self.f(jnp.matmul(W, x)), jnp.reshape(jnp.matmul(self.b(W), W), newshape=(self.d*self.d))], axis=0)
@@ -108,7 +109,7 @@ def dataloader(arrays, batch_size, *, key):
         end = batch_size
         while end < dataset_size:
             batch_perm = perm[start:end]
-            yield tuple(jnp.concatenate([array[batch_perm], jnp.zeros(shape=(batch_size, n_timestamps, n_dim**2))], axis=-1) for array in arrays)
+            yield tuple(jnp.concatenate([array[batch_perm], jnp.ones(shape=(batch_size, n_timestamps, n_dim**2))], axis=-1) for array in arrays)
             start = end
             end = start + batch_size
 
@@ -165,9 +166,9 @@ def main(
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        model_y = model(ts, ys[0, 0])
-        plt.plot(ts, model_y[:2, 0], c="crimson", label="Model")
-        plt.plot(ts, model_y[:2, 1], c="crimson")
+        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.ones(shape=(4, ))]))
+        plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
+        plt.plot(ts, model_y[:, 1], c="crimson")
         plt.legend()
         plt.tight_layout()
         plt.savefig("neural_ode.png")
@@ -176,4 +177,7 @@ def main(
     return ts, ys, model
 
 
-ts, ys, model = main()
+ts, ys, model = main(
+    steps_strategy=(50, 50),
+    print_every=10,
+)
