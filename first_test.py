@@ -4,6 +4,8 @@ import jax
 import jax.numpy as jnp
 import jax.nn as jnn
 import jax.random as jrandom 
+from functools import partial
+from jax import jit
 
 import diffrax
 import equinox as eqx
@@ -11,6 +13,8 @@ import equinox as eqx
 import matplotlib.pyplot as plt
 
 import optax
+
+import copy
 
 class IsoODE(eqx.Module):
     _Q: jnp.ndarray 
@@ -23,21 +27,53 @@ class IsoODE(eqx.Module):
         self._N = mean + std*jrandom.normal(key=key, shape=(d, d))
         self.d = d
 
+    # @partial(jit, static_argnums=1)
     def __call__(self, W):
-        Q = jnp.matmul(jnp.transpose(self._Q), self._Q)
-        N = jnp.matmul(jnp.transpose(self._N), self._N)
+        Q = jnp.transpose(self._Q) + self._Q
+        N = jnp.transpose(self._N) + self._N
         A = jnp.matmul(jnp.transpose(W), jnp.matmul(Q, W))
-        return A * N - jnp.transpose(A * N)
+        an = jnp.matmul(A, N)
+        return an - jnp.transpose(an)
 
-class DynX():
-    def __init__(self) -> None:
-        self.f = lambda x: jnp.abs(x)
+class GatedODE(eqx.Module):
+    a: jnp.array # learnable weights for the neural network matrices
+    f: list # list of neural networks
+    d: int
+
+    def __init__(self, d, width, key=None, depth=2, **kwargs):
+        super().__init__(**kwargs)
+        self.d = d
+        self.a = jrandom.normal(key=key, shape=(d, ))
+        self.f = [eqx.nn.MLP(
+                    in_size=d*d,
+                    out_size=d*d,
+                    width_size=width,
+                    depth=depth,
+                    activation=jnn.softplus,
+                    key=key+i, # in order not to initialize identical networks
+                ) for i in range(d)] 
+
+    def __call__(self, W):
+        d = self.d
+        w = jnp.reshape(W, (-1, d*d, ))
+        f_test = self.f[0](w[0, :])
+        B = [f(w_) for w_, f in zip(w, self.f)]
+        B = [jnp.reshape(f, W.shape[-2:]) for f in B]
+        B = [f - jnp.transpose(f) for f in B]
+        return jnp.array([a*b for a, b in zip(self.a, B)])
+
+
+
+class DynX(eqx.Module):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
 
     def __call__(self, x):
-        return self.f(x)
+        return jnp.abs(x)
 
 class Func(eqx.Module):
-    b: IsoODE
+    # b: IsoODE
+    b: GatedODE
     f: DynX
     d: int
 
@@ -50,17 +86,21 @@ class Func(eqx.Module):
         self.f = f
 
     def __call__(self, t, y, args):
+        d = self.d
+        x = y[:d] 
+        W = jnp.reshape(y[d:], newshape=(d, d))
+        f = self.f(jnp.matmul(W, x))
+        bw = jnp.matmul(self.b(W), W)
         
-        x = y[:self.d]
-        W = jnp.reshape(y[self.d:], newshape=(self.d, self.d))
-        return jnp.concatenate([self.f(jnp.matmul(W, x)), jnp.reshape(jnp.matmul(self.b(W), W), newshape=(self.d*self.d))], axis=0)
+        return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
 
 class NeuralODE(eqx.Module):
     func: Func
 
     def __init__(self, data_size, key, **kwargs):
         super().__init__(**kwargs)
-        b = IsoODE(data_size, key=key, **kwargs)
+        # b = IsoODE(data_size, key=key, **kwargs)
+        b = GatedODE(data_size, width=data_size**2, depth=1, key=key, **kwargs)
         f = DynX()
         self.func = Func(b, f, **kwargs)
 
@@ -104,6 +144,8 @@ def dataloader(arrays, batch_size, *, key):
     dataset_size, n_timestamps, n_dim = arrays[0].shape
     assert all(array.shape[0] == dataset_size for array in arrays)
     indices = jnp.arange(dataset_size)
+    # we concatenate some orthogonal matrix to the state, as we use one dynamical system
+    # to describe how the weights and state evolves
     cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
     while True:
         perm = jrandom.permutation(key, indices)
@@ -142,14 +184,17 @@ def main(
 
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi):
-        y_pred = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0])
-        return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2)
+        # test_call = model(ti, yi[0, 0])
+        y_pred = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
+        return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2) 
 
-    @eqx.filter_jit
+    # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
+        old_model = copy.deepcopy(model)
         model = eqx.apply_updates(model, updates)
+        # print(repr(old_model.func.b._Q - model.func.b._Q[0, 0])) # this is traced if we use @eqx.filter_jit
         return loss, model, opt_state
 
     for lr, steps, length in zip(lr_strategy, steps_strategy, length_strategy):
@@ -157,7 +202,7 @@ def main(
         opt_state = optim.init(eqx.filter(model, eqx.is_inexact_array))
         _ts = ts[: int(length_size * length)]
         _ys = ys[:, : int(length_size * length)] # length is the fraction of timestamps on which we train
-        for step, (yi,) in zip(
+        for step, (yi,) in zip( 
             range(steps), dataloader((_ys,), batch_size, key=loader_key)
         ):
             start = time.time()
@@ -181,6 +226,8 @@ def main(
 
 
 ts, ys, model = main(
-    steps_strategy=(50, 50),
-    print_every=10,
+    steps_strategy=(300, 300),
+    print_every=100,
+    length_strategy=(.3, 1),
+    lr_strategy=(3e-3, 1e-3),
 )
