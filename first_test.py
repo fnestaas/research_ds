@@ -72,8 +72,8 @@ class DynX(eqx.Module):
         return x
 
 class Func(eqx.Module):
-    # b: IsoODE
-    b: GatedODE
+    b: IsoODE
+    # b: GatedODE
     f: DynX
     d: int
 
@@ -99,8 +99,8 @@ class NeuralODE(eqx.Module):
 
     def __init__(self, data_size, key, **kwargs):
         super().__init__(**kwargs)
-        # b = IsoODE(data_size, key=key, **kwargs)
-        b = GatedODE(data_size, width=64, depth=2, key=key, **kwargs)
+        b = IsoODE(data_size, key=key, **kwargs)
+        # b = GatedODE(data_size, width=64, depth=2, key=key, **kwargs)
         f = DynX()
         self.func = Func(b, f, **kwargs)
 
@@ -191,7 +191,7 @@ def main(
         y_pred = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
         return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2) 
 
-    # @eqx.filter_jit
+    @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
@@ -229,7 +229,7 @@ def main(
 
 
 ts, ys, model = main(
-    steps_strategy=(400, 300),
+    steps_strategy=(300, 200),
     print_every=100,
     length_strategy=(.1, 1),
     lr_strategy=(3e-3, 3e-3),
