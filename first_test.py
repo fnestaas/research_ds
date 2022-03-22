@@ -69,7 +69,7 @@ class DynX(eqx.Module):
         super().__init__(**kwargs)
 
     def __call__(self, x):
-        return jnp.abs(x)
+        return x
 
 class Func(eqx.Module):
     # b: IsoODE
@@ -90,7 +90,7 @@ class Func(eqx.Module):
         x = y[:d] 
         W = jnp.reshape(y[d:], newshape=(d, d))
         f = self.f(jnp.matmul(W, x))
-        bw = jnp.matmul(self.b(W), W)
+        bw = jnp.matmul(W, self.b(W))
         
         return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
 
@@ -100,7 +100,7 @@ class NeuralODE(eqx.Module):
     def __init__(self, data_size, key, **kwargs):
         super().__init__(**kwargs)
         # b = IsoODE(data_size, key=key, **kwargs)
-        b = GatedODE(data_size, width=data_size**2, depth=1, key=key, **kwargs)
+        b = GatedODE(data_size, width=64, depth=2, key=key, **kwargs)
         f = DynX()
         self.func = Func(b, f, **kwargs)
 
@@ -146,7 +146,10 @@ def dataloader(arrays, batch_size, *, key):
     indices = jnp.arange(dataset_size)
     # we concatenate some orthogonal matrix to the state, as we use one dynamical system
     # to describe how the weights and state evolves
-    cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
+    # cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
+    a = 1/jnp.sqrt(2)
+    b = -a
+    cat = jnp.reshape(jnp.concatenate([jnp.array([[a, b], [-b, a]])]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
     while True:
         perm = jrandom.permutation(key, indices)
         (key,) = jrandom.split(key, 1)
@@ -226,8 +229,8 @@ def main(
 
 
 ts, ys, model = main(
-    steps_strategy=(300, 300),
+    steps_strategy=(400, 300),
     print_every=100,
-    length_strategy=(.3, 1),
-    lr_strategy=(3e-3, 1e-3),
+    length_strategy=(.1, 1),
+    lr_strategy=(3e-3, 3e-3),
 )
