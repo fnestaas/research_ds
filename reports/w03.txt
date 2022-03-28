@@ -1,0 +1,7 @@
+Notes week 3
+Surprisingly, training on only the first 10% with 10 nodes and 2 layers gives better results
+for gatedode. Also requires fewer steps to get better results (200, 200 instead of 500, 400)
+
+There is a really strange structure in nfe.pkl. Idk why really
+
+

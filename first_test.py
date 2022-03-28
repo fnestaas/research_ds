@@ -6,15 +6,12 @@ import jax.nn as jnn
 import jax.random as jrandom 
 from functools import partial
 from jax import jit
-
 import diffrax
 import equinox as eqx
-
 import matplotlib.pyplot as plt
-
 import optax
 
-import copy
+import joblib
 
 from WeightDynamics import * 
 
@@ -51,11 +48,13 @@ class Func(eqx.Module):
 
 class NeuralODE(eqx.Module):
     func: Func
+    num_steps: list 
 
     def __init__(self, b, **kwargs):
         super().__init__(**kwargs)
         f = DynX()
         self.func = Func(b, f, **kwargs)
+        self.num_steps = []
 
     def __call__(self, ts, y0): 
         solution = diffrax.diffeqsolve(
@@ -68,7 +67,8 @@ class NeuralODE(eqx.Module):
             stepsize_controller=diffrax.PIDController(),
             saveat=diffrax.SaveAt(ts=ts),
         )
-        return solution.ys
+        num_steps = solution.stats['num_steps']
+        return solution.ys, num_steps
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -99,10 +99,10 @@ def dataloader(arrays, batch_size, *, key):
     indices = jnp.arange(dataset_size)
     # we concatenate some orthogonal matrix to the state, as we use one dynamical system
     # to describe how the weights and state evolves
-    # cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
-    a = 1/jnp.sqrt(2)
-    b = -a
-    cat = jnp.reshape(jnp.concatenate([jnp.array([[a, b], [-b, a]])]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
+    cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
+    # a = 1/jnp.sqrt(2)
+    # b = -a
+    # cat = jnp.reshape(jnp.concatenate([jnp.array([[a, b], [-b, a]])]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
     while True:
         perm = jrandom.permutation(key, indices)
         (key,) = jrandom.split(key, 1)
@@ -133,6 +133,8 @@ def main(
     b = GatedODE(data_size, width=10, depth=2, key=key)
     model = NeuralODE(b=b)
 
+    stats = []
+
     # Training loop like normal.
     #
     # Only thing to notice is that up until step 500 we train on only the first 10% of
@@ -140,19 +142,20 @@ def main(
     # minimum.
 
     @eqx.filter_value_and_grad
-    def grad_loss(model, ti, yi):
+    def grad_loss(model, ti, yi, stats):
         # test_call = model(ti, yi[0, 0])
-        y_pred = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
-        return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2) 
+        y_pred, stat = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
+        stats.append(stat)
+        return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2) # in this example, only the first two dimensions are the output
 
-    @eqx.filter_jit
-    def make_step(ti, yi, model, opt_state):
-        loss, grads = grad_loss(model, ti, yi)
+    # @eqx.filter_jit
+    def make_step(ti, yi, model, opt_state, stats):
+        loss, grads = grad_loss(model, ti, yi, stats)
         updates, opt_state = optim.update(grads, opt_state)
-        old_model = copy.deepcopy(model)
+        # old_model = copy.deepcopy(model)
         model = eqx.apply_updates(model, updates)
         # print(repr(old_model.func.b._Q - model.func.b._Q[0, 0])) # this is traced if we use @eqx.filter_jit
-        return loss, model, opt_state
+        return loss, model, opt_state, stats
 
     for lr, steps, length in zip(lr_strategy, steps_strategy, length_strategy):
         optim = optax.adabelief(lr)
@@ -163,7 +166,8 @@ def main(
             range(steps), dataloader((_ys,), batch_size, key=loader_key)
         ):
             start = time.time()
-            loss, model, opt_state = make_step(_ts, yi, model, opt_state)
+            loss, model, opt_state, stat = make_step(_ts, yi, model, opt_state, stats)
+            stats.append(stat)
             end = time.time()
             if (step % print_every) == 0 or step == steps - 1:
                 print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
@@ -171,7 +175,7 @@ def main(
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.array([1, 0, 0, 1])]))
+        model_y, _ = model(ts, jnp.concatenate([ys[0, 0], jnp.array([1, 0, 0, 1])]))
         plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
         plt.plot(ts, model_y[:, 1], c="crimson")
         plt.legend()
@@ -179,12 +183,15 @@ def main(
         plt.savefig("neural_ode2ode.png")
         plt.show()
 
-    return ts, ys, model
+    return ts, ys, model, stats
 
 
-ts, ys, model = main(
+ts, ys, model, stats = main(
     steps_strategy=(200, 200),
     print_every=100,
-    length_strategy=(.1, 1),
+    length_strategy=(.1, .1),
     lr_strategy=(3e-3, 3e-3),
 )
+
+print(stats)
+joblib.dump(stats, 'nfe.pkl')

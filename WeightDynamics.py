@@ -44,7 +44,7 @@ class GatedODE(eqx.Module):
                     out_size=d*d,
                     width_size=width,
                     depth=depth,
-                    activation=jnn.softplus,
+                    activation=jnn.swish,
                     key=key+i, # in order not to initialize identical networks
                 ) for i in range(d)] 
 
