@@ -1,0 +1,27 @@
+These weeks
+
+Read Learning differential equations that are easy to solve, no conflict with our work
+- Idea here: regularize derivatives of learned dynamics to encourage simple dynamics
+
+Familiarized myself with JAX and Equinox
+
+Implemented GatedODE and IsoODE (does not work as well as GatedODE)
+- Did not implement learning initial state yet
+
+Found some bugs/bad writing in Ode2ODE
+
+GatedODE performs worse and is slower than just using a regular neural network, on the toy example
+
+Would have liked to:
+implement my own method from last week
+Get further with what I worked with
+Check wandb, Euler
+Implement novel dynamics to regularize magnitude of state
+
+Next week:
+x sigmoid(x) as activation "swish"
+Plot how NFE changes over epochs
+How max state norm changes over epochs
+Plot grad of theta(t) and gradient of state (i.e. d(x(T))/d(x(0)), or dL/dz(0). see diffrax adjoint sensitivity)
+
+if time: implement initial state ode2ode

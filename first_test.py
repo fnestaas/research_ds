@@ -56,7 +56,6 @@ class GatedODE(eqx.Module):
     def __call__(self, W):
         d = self.d
         w = jnp.reshape(W, (-1, d*d, ))
-        f_test = self.f[0](w[0, :])
         B = [f(w_) for w_, f in zip(w, self.f)]
         B = [jnp.reshape(f, W.shape[-2:]) for f in B]
         B = [f - jnp.transpose(f) for f in B]
@@ -72,8 +71,8 @@ class DynX(eqx.Module):
         return x
 
 class Func(eqx.Module):
-    b: IsoODE
-    # b: GatedODE
+    # b: IsoODE
+    b: GatedODE
     f: DynX
     d: int
 
@@ -99,8 +98,8 @@ class NeuralODE(eqx.Module):
 
     def __init__(self, data_size, key, **kwargs):
         super().__init__(**kwargs)
-        b = IsoODE(data_size, key=key, **kwargs)
-        # b = GatedODE(data_size, width=64, depth=2, key=key, **kwargs)
+        # b = IsoODE(data_size, key=key, **kwargs)
+        b = GatedODE(data_size, width=256, depth=2, key=key, **kwargs)
         f = DynX()
         self.func = Func(b, f, **kwargs)
 
@@ -222,14 +221,14 @@ def main(
         plt.plot(ts, model_y[:, 1], c="crimson")
         plt.legend()
         plt.tight_layout()
-        plt.savefig("neural_ode.png")
+        plt.savefig("neural_ode2ode.png")
         plt.show()
 
     return ts, ys, model
 
 
 ts, ys, model = main(
-    steps_strategy=(300, 200),
+    steps_strategy=(500, 400),
     print_every=100,
     length_strategy=(.1, 1),
     lr_strategy=(3e-3, 3e-3),
