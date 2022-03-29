@@ -166,8 +166,7 @@ def main(
             range(steps), dataloader((_ys,), batch_size, key=loader_key)
         ):
             start = time.time()
-            loss, model, opt_state, stat = make_step(_ts, yi, model, opt_state, stats)
-            stats.append(stat)
+            loss, model, opt_state, stats = make_step(_ts, yi, model, opt_state, stats)
             end = time.time()
             if (step % print_every) == 0 or step == steps - 1:
                 print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
@@ -191,7 +190,8 @@ ts, ys, model, stats = main(
     print_every=100,
     length_strategy=(.1, .1),
     lr_strategy=(3e-3, 3e-3),
+    plot=False, 
 )
 
-print(stats)
+# print(stats)
 joblib.dump(stats, 'nfe.pkl')
