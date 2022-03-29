@@ -4,4 +4,17 @@ for gatedode. Also requires fewer steps to get better results (200, 200 instead 
 
 There is a really strange structure in nfe.pkl. Idk why really
 
+This week
+Restructured classes of NeuralODE (see WeightDynamics)
+Did swish
+Did NFE
+Did (most of) state norm analysis (toy examples done) 
+Did look at adjoints in diffrax, but it seems this cannot be called directly -> make classes
+Did not have time to implement the above since it took a while to understand how to 
+go about solving it
+
+
+Want to do next week:
+Finish implementing the above to work well with NeuralODEs
+
 
