@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 nfes = joblib.load('nfe.pkl')
 N = len(nfes)
 
-mean_nfe = [jnp.mean(n) for n in nfes]
+mean_nfe = [jnp.mean(n[0]) for n in nfes]
 
 fig, ax = plt.subplots(1, 1)
 

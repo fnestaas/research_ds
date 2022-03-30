@@ -33,7 +33,7 @@ class ODE_Sol(eqx.Module):
             term, 
             solver, 
             t0=0, 
-            t1=1, 
+            t1=t, 
             dt0=0.1, 
             y0=y0, 
             saveat=saveat, 
@@ -55,7 +55,9 @@ y0 = jnp.array([0., 1.])
 ode_sol = ODE_Sol(y0=y0)
 f, g = grad_wrt_init(ode_sol, t=1.)
 
-
+"""
+The following is all that I tried out in order to solve the problem
+"""
 
 # def to_diff(y0):
 #     vector_field = lambda t, y, args: jnp.array([-y[1]*10, y[0]*10])

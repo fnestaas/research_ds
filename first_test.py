@@ -144,8 +144,13 @@ def main(
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi, stats):
         # test_call = model(ti, yi[0, 0])
-        y_pred, stat = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
-        stats.append(stat)
+        y_pred, nfe = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
+        norm = jnp.linalg.norm(y_pred, axis=-1) # TODO: cannot pickle 'weakref' object
+        # probably joblib is not compatible with jnp
+        stats.append((
+            nfe, 
+            norm, 
+            ))
         return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2) # in this example, only the first two dimensions are the output
 
     # @eqx.filter_jit

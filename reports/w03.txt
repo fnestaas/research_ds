@@ -2,7 +2,8 @@ Notes week 3
 Surprisingly, training on only the first 10% with 10 nodes and 2 layers gives better results
 for gatedode. Also requires fewer steps to get better results (200, 200 instead of 500, 400)
 
-There is a really strange structure in nfe.pkl. Idk why really
+Questions:
+Is there a better way to differentiate wrt initial state? Yes see notes
 
 This week
 Restructured classes of NeuralODE (see WeightDynamics)
@@ -14,7 +15,16 @@ Did not have time to implement the above since it took a while to understand how
 go about solving it
 
 
-Want to do next week:
+Next week:
 Finish implementing the above to work well with NeuralODEs
+Set up wandb, euler
+Refactor code so that stats can be obtained easily
+If time: Implement first idea of regularizing gradient norm, novel methods
 
+
+Notes:
+Jax has_aux, value_and_grad, instead of eqx
+Try pickle instead of joblib
+Jacobian in JAX: jacrev (aka backprop ca)/jacfwd
+y = diffeqsolve( ... y0, ...), jac = jacrev(f, 1) # 1 because param nr 1, wherever y0 is
 
