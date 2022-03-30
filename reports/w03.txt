@@ -28,3 +28,5 @@ Try pickle instead of joblib
 Jacobian in JAX: jacrev (aka backprop ca)/jacfwd
 y = diffeqsolve( ... y0, ...), jac = jacrev(f, 1) # 1 because param nr 1, wherever y0 is
 
+
+
