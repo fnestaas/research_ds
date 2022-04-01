@@ -1,9 +1,11 @@
 import time
+from chex import ArrayTree
 
 import jax 
 import jax.numpy as jnp
 import jax.nn as jnn
 import jax.random as jrandom 
+import numpy as np
 from functools import partial
 from jax import jit
 import diffrax
@@ -11,64 +13,10 @@ import equinox as eqx
 import matplotlib.pyplot as plt
 import optax
 
-import joblib
+import pickle
 
 from WeightDynamics import * 
-
-
-
-class DynX(eqx.Module):
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-
-    def __call__(self, x):
-        return x
-
-class Func(eqx.Module):
-    b: WeightDynamics
-    f: DynX
-    d: int
-
-    def __init__(self, b, f, **kwargs):
-        super().__init__(**kwargs)
-        # dynamics by which W_t should evolve
-        self.b = b
-        self.d = b.d # dimension of x_t
-        # dynamics by which x_t should evolve
-        self.f = f
-
-    def __call__(self, t, y, args):
-        d = self.d
-        x = y[:d] 
-        W = jnp.reshape(y[d:], newshape=(d, d))
-        f = self.f(jnp.matmul(W, x))
-        bw = jnp.matmul(W, self.b(W))
-        
-        return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
-
-class NeuralODE(eqx.Module):
-    func: Func
-    num_steps: list 
-
-    def __init__(self, b, **kwargs):
-        super().__init__(**kwargs)
-        f = DynX()
-        self.func = Func(b, f, **kwargs)
-        self.num_steps = []
-
-    def __call__(self, ts, y0): 
-        solution = diffrax.diffeqsolve(
-            diffrax.ODETerm(self.func),
-            diffrax.Tsit5(),
-            t0=ts[0],
-            t1=ts[-1],
-            dt0=ts[1] - ts[0],
-            y0=y0,
-            stepsize_controller=diffrax.PIDController(),
-            saveat=diffrax.SaveAt(ts=ts),
-        )
-        num_steps = solution.stats['num_steps']
-        return solution.ys, num_steps
+from NeuralODE import *
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -133,8 +81,6 @@ def main(
     b = GatedODE(data_size, width=10, depth=2, key=key)
     model = NeuralODE(b=b)
 
-    stats = []
-
     # Training loop like normal.
     #
     # Only thing to notice is that up until step 500 we train on only the first 10% of
@@ -142,25 +88,18 @@ def main(
     # minimum.
 
     @eqx.filter_value_and_grad
-    def grad_loss(model, ti, yi, stats):
-        # test_call = model(ti, yi[0, 0])
-        y_pred, nfe = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
-        norm = jnp.linalg.norm(y_pred, axis=-1) # TODO: cannot pickle 'weakref' object
-        # probably joblib is not compatible with jnp
-        stats.append((
-            nfe, 
-            norm, 
-            ))
+    def grad_loss(model, ti, yi):
+        y_pred = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
         return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2) # in this example, only the first two dimensions are the output
 
     # @eqx.filter_jit
-    def make_step(ti, yi, model, opt_state, stats):
-        loss, grads = grad_loss(model, ti, yi, stats)
+    def make_step(ti, yi, model, opt_state):
+        loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
         # old_model = copy.deepcopy(model)
         model = eqx.apply_updates(model, updates)
         # print(repr(old_model.func.b._Q - model.func.b._Q[0, 0])) # this is traced if we use @eqx.filter_jit
-        return loss, model, opt_state, stats
+        return loss, model, opt_state
 
     for lr, steps, length in zip(lr_strategy, steps_strategy, length_strategy):
         optim = optax.adabelief(lr)
@@ -171,7 +110,7 @@ def main(
             range(steps), dataloader((_ys,), batch_size, key=loader_key)
         ):
             start = time.time()
-            loss, model, opt_state, stats = make_step(_ts, yi, model, opt_state, stats)
+            loss, model, opt_state = make_step(_ts, yi, model, opt_state)
             end = time.time()
             if (step % print_every) == 0 or step == steps - 1:
                 print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
@@ -187,10 +126,10 @@ def main(
         plt.savefig("neural_ode2ode.png")
         plt.show()
 
-    return ts, ys, model, stats
+    return ts, ys, model
 
 
-ts, ys, model, stats = main(
+ts, ys, model = main(
     steps_strategy=(200, 200),
     print_every=100,
     length_strategy=(.1, .1),
@@ -198,5 +137,7 @@ ts, ys, model, stats = main(
     plot=False, 
 )
 
-# print(stats)
-joblib.dump(stats, 'nfe.pkl')
+with open('stats.pkl', 'wb') as handle:
+    pickle.dump(model.get_stats(), handle)
+
+

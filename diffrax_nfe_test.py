@@ -2,19 +2,20 @@ import jax.numpy as jnp
 import joblib 
 import matplotlib.pyplot as plt 
 
-nfes = joblib.load('nfe.pkl')
-N = len(nfes)
+stats = joblib.load('stats.pkl')
+key = 'num_steps' # 'state_norm' 
+N = len(stats[key])
 
-mean_nfe = [jnp.mean(n[0]) for n in nfes]
+stat = [jnp.mean(s) for s in stats[key]]
 
 fig, ax = plt.subplots(1, 1)
 
 ax.plot(
     jnp.arange(N), 
-    mean_nfe,
+    stat,
     )
 
 ax.set_xlabel('Epoch')
-ax.set_ylabel('Mean NFE')
+ax.set_ylabel(key)
 
 plt.show()
