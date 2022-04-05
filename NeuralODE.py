@@ -1,8 +1,8 @@
 import jax.numpy as jnp
+import jax
 import diffrax
 import equinox as eqx
 from WeightDynamics import * 
-
 
 
 class DynX(eqx.Module):
@@ -56,13 +56,13 @@ class NeuralODE(eqx.Module):
     func: Func
     stats: StatTracker
 
-    def __init__(self, b, **kwargs):
+    def __init__(self, b, to_track=['num_steps', 'state_norm', 'grad_init'], **kwargs):
         super().__init__(**kwargs)
         f = DynX()
         self.func = Func(b, f, **kwargs)
-        self.stats = StatTracker(['num_steps', 'state_norm'])
+        self.stats = StatTracker(to_track)
 
-    def __call__(self, ts, y0): 
+    def solve(self, ts, y0):
         solution = diffrax.diffeqsolve(
             diffrax.ODETerm(self.func),
             diffrax.Tsit5(),
@@ -73,22 +73,31 @@ class NeuralODE(eqx.Module):
             stepsize_controller=diffrax.PIDController(),
             saveat=diffrax.SaveAt(ts=ts),
         )
+        return solution
 
+    def __call__(self, ts, y0): 
+        solution = self.solve(ts, y0)
         y_pred = solution.ys
-        num_steps = solution.stats['num_steps']
-
         # update the statistics
-        self.stats.update(
-                {
-                    'num_steps': num_steps.val._value, 
-                    'state_norm': jnp.linalg.norm(y_pred).val.aval.val, 
-                }
-            )
+        self.stats.update(self.compute_stats(solution, ts, y0))
         return y_pred
+    
+    def compute_stats(self, solution, ts, y0):
+        keys = list(self.stats.attributes.keys())
+        res = {key: [] for key in keys}
+        if 'num_steps' in keys:
+            res['num_steps'] = solution.stats['num_steps'].val
+        if 'state_norm' in keys:
+            y_pred = solution.ys
+            res['state_norm'] = jnp.linalg.norm(y_pred).val.aval.val
+        if 'grad_init' in keys:
+            to_grad = lambda y: self.solve(ts, y)
+            res['grad_init'] = jax.jacfwd(to_grad)(y0).ys[-1, :, :].val.aval.val._value
+        return res
     
     def get_stats(self, which=None):
         """
-        Return the recorded statistics of the NeuralODE.
+        Return recorded statistics of the NeuralODE.
         which is which statistic to return; if none, returns the dict of all statistics
         """
         if which is not None:

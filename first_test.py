@@ -79,7 +79,7 @@ def main(
     _, length_size, data_size = ys.shape
 
     b = GatedODE(data_size, width=10, depth=2, key=key)
-    model = NeuralODE(b=b)
+    model = NeuralODE(b=b, to_track=['num_steps'])
 
     # Training loop like normal.
     #
@@ -132,10 +132,19 @@ def main(
 ts, ys, model = main(
     steps_strategy=(200, 200),
     print_every=100,
-    length_strategy=(.1, .1),
-    lr_strategy=(3e-3, 3e-3),
+    length_strategy=(.1, 1),
+    lr_strategy=(3e-3, 1e-3),
     plot=False, 
 )
+
+with open('num_steps.pkl', 'wb') as handle:
+    pickle.dump(model.get_stats()['num_steps'], handle)
+
+with open('state_norm.pkl', 'wb') as handle:
+    pickle.dump(model.get_stats()['state_norm'], handle)
+
+with open('grad_init.pkl', 'wb') as handle:
+    pickle.dump(model.get_stats()['grad_init'], handle)
 
 with open('stats.pkl', 'wb') as handle:
     pickle.dump(model.get_stats(), handle)

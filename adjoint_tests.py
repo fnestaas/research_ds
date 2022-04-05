@@ -51,9 +51,35 @@ def grad_wrt_init(model, t):
     y = model(t)
     return y[0]
 
+def f(y0):
+    t = 1
+    vector_field = lambda t, y, args: jnp.array([-y[1]*10, y[0]*10])
+    term = ODETerm(vector_field)
+    solver = Dopri5()
+    saveat = SaveAt(ts=[0, t])
+    stepsize_controller = PIDController(rtol=1e-5, atol=1e-5)
+
+    sol_rca = diffeqsolve(
+        term, 
+        solver, 
+        t0=0, 
+        t1=t, 
+        dt0=0.1, 
+        y0=y0, 
+        saveat=saveat, 
+        stepsize_controller=stepsize_controller, 
+        adjoint=diffrax.RecursiveCheckpointAdjoint()
+        )
+    
+    return sol_rca.ys[-1, :] # return solution at final time
+
 y0 = jnp.array([0., 1.])
 ode_sol = ODE_Sol(y0=y0)
-f, g = grad_wrt_init(ode_sol, t=1.)
+# f, g = grad_wrt_init(ode_sol, t=1.)
+# grad = jax.jacrev(ode_sol, 0)(y0)
+grad = jax.jacrev(f)
+result = grad(y0)
+
 
 """
 The following is all that I tried out in order to solve the problem
