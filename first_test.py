@@ -78,8 +78,8 @@ def main(
     ts, ys = get_data(dataset_size, key=data_key)
     _, length_size, data_size = ys.shape
 
-    b = GatedODE(data_size, width=10, depth=2, key=key)
-    model = NeuralODE(b=b, to_track=['num_steps'])
+    b = GatedODE(data_size, width=4, depth=2, key=key)
+    model = NeuralODE(b=b)
 
     # Training loop like normal.
     #
@@ -89,17 +89,39 @@ def main(
 
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi):
-        y_pred = jax.vmap(model, in_axes=(None, 0))(ti, yi[:, 0, :]) 
+        y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], True) 
         return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2) # in this example, only the first two dimensions are the output
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
-        # old_model = copy.deepcopy(model)
+        dLdt = loss_change(model, grads, ti, yi)
+        # jax.jacrev(grads)(ti, yi[0, 0, :], False)
         model = eqx.apply_updates(model, updates)
-        # print(repr(old_model.func.b._Q - model.func.b._Q[0, 0])) # this is traced if we use @eqx.filter_jit
         return loss, model, opt_state
+    
+    def loss_change(model, grads, ts, ys):
+        """
+        compute the time derivative of the grads
+        """
+        callable_grads = make_grads_callable(model, grads)
+        to_diff = lambda t: jax.vmap(callable_grads, in_axes=(None, 0, None))(t, ys[:, 0, :], False)
+        dLdt = jax.jacrev(to_diff)(ts)
+        return dLdt
+
+    def make_grads_callable(model, grads):
+        """
+        the gradients are not callable since the parameters that should not be updated are set to None. This function sets
+        the parameters that are None in grads and not None in model to the value they take in model.
+        """
+        return jax.tree_map(_fill_none, model, grads)
+
+    def _fill_none(m, g):
+        if g is None and m is not None:
+            return m 
+        else:
+            return g
 
     for lr, steps, length in zip(lr_strategy, steps_strategy, length_strategy):
         optim = optax.adabelief(lr)
@@ -118,7 +140,7 @@ def main(
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        model_y, _ = model(ts, jnp.concatenate([ys[0, 0], jnp.array([1, 0, 0, 1])]))
+        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.array([1, 0, 0, 1])]))
         plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
         plt.plot(ts, model_y[:, 1], c="crimson")
         plt.legend()
@@ -132,9 +154,11 @@ def main(
 ts, ys, model = main(
     steps_strategy=(200, 200),
     print_every=100,
+    batch_size=4,
     length_strategy=(.1, 1),
     lr_strategy=(3e-3, 1e-3),
     plot=False, 
+    dataset_size=100,
 )
 
 with open('num_steps.pkl', 'wb') as handle:
