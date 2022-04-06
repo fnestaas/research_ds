@@ -17,6 +17,7 @@ import pickle
 
 from WeightDynamics import * 
 from NeuralODE import *
+import loss_change
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -36,7 +37,7 @@ def _get_data(ts, *, key):
 
 
 def get_data(dataset_size, *, key):
-    ts = jnp.linspace(0, 10, 100)
+    ts = jnp.linspace(0, 1, 100)
     key = jrandom.split(key, dataset_size)
     ys = jax.vmap(lambda key: _get_data(ts, key=key))(key)
     return ts, ys
@@ -81,6 +82,7 @@ def main(
     b = GatedODE(data_size, width=4, depth=2, key=key)
     model = NeuralODE(b=b)
 
+    norm_tracker = StatTracker(['loss_change'])
     # Training loop like normal.
     #
     # Only thing to notice is that up until step 500 we train on only the first 10% of
@@ -96,32 +98,10 @@ def main(
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
-        dLdt = loss_change(model, grads, ti, yi)
-        # jax.jacrev(grads)(ti, yi[0, 0, :], False)
+        dLdt = loss_change.loss_change(model, grads, jnp.linspace(0, ti[-1], 10), yi)
+        norm_tracker.update({'loss_change': jnp.linalg.norm(dLdt, axis=-1)._value})
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
-    
-    def loss_change(model, grads, ts, ys):
-        """
-        compute the time derivative of the grads
-        """
-        callable_grads = make_grads_callable(model, grads)
-        to_diff = lambda t: jax.vmap(callable_grads, in_axes=(None, 0, None))(t, ys[:, 0, :], False)
-        dLdt = jax.jacrev(to_diff)(ts)
-        return dLdt
-
-    def make_grads_callable(model, grads):
-        """
-        the gradients are not callable since the parameters that should not be updated are set to None. This function sets
-        the parameters that are None in grads and not None in model to the value they take in model.
-        """
-        return jax.tree_map(_fill_none, model, grads)
-
-    def _fill_none(m, g):
-        if g is None and m is not None:
-            return m 
-        else:
-            return g
 
     for lr, steps, length in zip(lr_strategy, steps_strategy, length_strategy):
         optim = optax.adabelief(lr)
@@ -148,10 +128,10 @@ def main(
         plt.savefig("neural_ode2ode.png")
         plt.show()
 
-    return ts, ys, model
+    return ts, ys, model, norm_tracker
 
 
-ts, ys, model = main(
+ts, ys, model, norm_tracker = main(
     steps_strategy=(200, 200),
     print_every=100,
     batch_size=4,
@@ -161,16 +141,19 @@ ts, ys, model = main(
     dataset_size=100,
 )
 
-with open('num_steps.pkl', 'wb') as handle:
+with open('outputs/num_steps.pkl', 'wb') as handle:
     pickle.dump(model.get_stats()['num_steps'], handle)
 
-with open('state_norm.pkl', 'wb') as handle:
+with open('outputs/state_norm.pkl', 'wb') as handle:
     pickle.dump(model.get_stats()['state_norm'], handle)
 
-with open('grad_init.pkl', 'wb') as handle:
+with open('outputs/grad_init.pkl', 'wb') as handle:
     pickle.dump(model.get_stats()['grad_init'], handle)
 
-with open('stats.pkl', 'wb') as handle:
+with open('outputs/stats.pkl', 'wb') as handle:
     pickle.dump(model.get_stats(), handle)
+
+with open('outputs/grad_info.pkl', 'wb') as handle:
+    pickle.dump(norm_tracker.attributes['loss_change'], handle)
 
 
