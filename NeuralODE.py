@@ -39,6 +39,7 @@ class Func(eqx.Module):
         bw = jnp.matmul(W, self.b(W))
         
         return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
+        
 
 class StatTracker():
     """
@@ -75,11 +76,12 @@ class NeuralODE(eqx.Module):
         )
         return solution
 
-    def __call__(self, ts, y0): 
+    def __call__(self, ts, y0, update=False): 
         solution = self.solve(ts, y0)
         y_pred = solution.ys
-        # update the statistics
-        self.stats.update(self.compute_stats(solution, ts, y0))
+        if update:
+            # update the statistics
+            self.stats.update(self.compute_stats(solution, ts, y0))
         return y_pred
     
     def compute_stats(self, solution, ts, y0):
