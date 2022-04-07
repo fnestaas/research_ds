@@ -2,12 +2,15 @@ Notes week 4
 
 This week I finished all of the todos of last week
 
-Some current issues are that computing the time derivative of the gradient of the loss wrt the parameters is very slow, and that it is hard to verify whether the computations are actually doing what I want them to. 
+Some current issues are that computing the time derivative of the gradient of the loss wrt the parameters is very slow, and that it is 
+hard to verify whether the computations are actually doing what I want them to. 
 
-While I have logged into Euler, I have yet to try running this code there, but my guess is that it is still too show to make a loss function out of it
+While I have logged into Euler, I have yet to try running this code there, but my guess is that it is still too show to make a loss 
+function out of it
 
 Next week:
 Try to improve runtime mentioned above
 If feasible, implement regularization to prevent large gradient fluctuations
 Work on novel approaches to the problem, potentially also other ways to compute the gradient fluctuations (due to runtime concerns)
+One idea is to differentiate the expression used in the NeuralODE paper and implement the analytic expression
 
