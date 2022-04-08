@@ -2,6 +2,7 @@ import equinox as eqx
 import jax.numpy as jnp 
 import jax.random as jrandom
 import jax.nn as jnn
+from nn_with_params import *
 
 class WeightDynamics(eqx.Module):
     d: int 
@@ -10,6 +11,8 @@ class WeightDynamics(eqx.Module):
         super().__init__()
         self.d = d 
 
+    def set_params(self, params: dict):
+        pass
 
 class IsoODE(WeightDynamics):
     _Q: jnp.ndarray 
@@ -30,23 +33,29 @@ class IsoODE(WeightDynamics):
         an = jnp.matmul(A, N)
         return an - jnp.transpose(an)
 
+
+
 class GatedODE(WeightDynamics):
     a: jnp.array # learnable weights for the neural network matrices
     f: list # list of neural networks
     d: int
+    n_params: int
 
     def __init__(self, d, width, key=None, depth=2, **kwargs):
         super().__init__(d, **kwargs)
         self.d = d
         self.a = jrandom.normal(key=key, shape=(d, ))
-        self.f = [eqx.nn.MLP(
-                    in_size=d*d,
-                    out_size=d*d,
-                    width_size=width,
-                    depth=depth,
-                    activation=jnn.swish,
-                    key=key+i, # in order not to initialize identical networks
-                ) for i in range(d)] 
+        self.f = [
+            MLPWithParams( 
+                in_size=d*d,
+                out_size=d*d,
+                width_size=width,
+                depth=depth,
+                activation=jnn.swish,
+                key=key+i, # in order not to initialize identical networks
+            ) for i in range(d)
+        ]
+        self.n_params = int(sum([f.n_params for f in self.f]))
 
     def __call__(self, W):
         d = self.d
@@ -56,5 +65,27 @@ class GatedODE(WeightDynamics):
         B = [jnp.reshape(f, W.shape[-2:]) for f in B]
         B = [f - jnp.transpose(f) for f in B]
         return jnp.array([a*b for a, b in zip(self.a, B)])
+
+    def get_params(self, as_dict=False):
+        if as_dict:
+            params = {}
+            for i, f in enumerate(self.f):
+                params[i] = f.get_params()
+            return params
+        else:
+            raise NotImplementedError
+
+    def set_params(self, params, as_dict=False):
+        if as_dict:
+            for f, v in zip(self.f, params.values()):
+                f.set_params(v)
+        else:
+            counter = 0
+            for f in self.f:
+                p = params[counter:counter+f.n_params]
+                f.set_params(p, as_dict=False)
+                counter = counter + f.n_params
+
+        
 
     

@@ -18,6 +18,7 @@ import pickle
 from WeightDynamics import * 
 from NeuralODE import *
 import loss_change
+import other_loss_change
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -37,7 +38,7 @@ def _get_data(ts, *, key):
 
 
 def get_data(dataset_size, *, key):
-    ts = jnp.linspace(0, 1, 100)
+    ts = jnp.linspace(0, 10, 100)
     key = jrandom.split(key, dataset_size)
     ys = jax.vmap(lambda key: _get_data(ts, key=key))(key)
     return ts, ys
@@ -83,6 +84,7 @@ def main(
     model = NeuralODE(b=b)
 
     norm_tracker = StatTracker(['loss_change'])
+
     # Training loop like normal.
     #
     # Only thing to notice is that up until step 500 we train on only the first 10% of
@@ -98,8 +100,9 @@ def main(
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
-        dLdt = loss_change.loss_change(model, grads, jnp.linspace(0, ti[-1], 10), yi)
-        norm_tracker.update({'loss_change': jnp.linalg.norm(dLdt, axis=-1)._value})
+        # dLdt = loss_change.loss_change(model, grads, jnp.linspace(0, ti[-1], 10), yi)
+        dLdt = other_loss_change.loss_change_other(yi, ti, lambda x, xx: jnp.mean((x[:, :, :2] - xx[:, :, :2])**2), grads, model)
+        # norm_tracker.update({'loss_change': jnp.linalg.norm(dLdt, axis=-1)._value})
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
 
@@ -137,7 +140,7 @@ ts, ys, model, norm_tracker = main(
     batch_size=4,
     length_strategy=(.1, 1),
     lr_strategy=(3e-3, 1e-3),
-    plot=False, 
+    plot=True, 
     dataset_size=100,
 )
 

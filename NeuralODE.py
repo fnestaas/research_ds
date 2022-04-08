@@ -15,6 +15,12 @@ class DynX(eqx.Module):
     def __call__(self, x):
         return x
 
+    def get_params(self):
+        return None
+    
+    def set_params(self, params):
+        pass
+
 class Func(eqx.Module):
     """
     Complete dynamics of the system; keeps track of how the weights and state evolve.
@@ -39,6 +45,17 @@ class Func(eqx.Module):
         bw = jnp.matmul(W, self.b(W))
         
         return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
+
+    def get_params(self):
+        params = {}
+        params['b'] = self.b.get_params()
+        params['f'] = self.f.get_params()
+        return params
+
+    def set_params(self, params: dict):
+        self.b.set_params(params['b'])
+        if 'f' in params.keys():
+            self.f.set_params(params['f'])
         
 
 class StatTracker():
@@ -106,3 +123,9 @@ class NeuralODE(eqx.Module):
             return self.stats.attributes[which]
         else:
             return self.stats.attributes
+
+    def get_params(self):
+        return {'func': self.func.get_params()}
+
+    def set_params(self, params: dict):
+        self.func.set_params(params['func'])
