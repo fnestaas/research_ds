@@ -10,7 +10,8 @@ class LinearWithParams(Linear):
 
     def __init__(self, in_features: int, out_features: int, use_bias: bool = True, *, key: "jax.random.PRNGKey"):
         super().__init__(in_features, out_features, use_bias, key=key)
-        self.n_params = in_features * out_features + int(use_bias)
+        self.n_params = (in_features + int(use_bias)) * out_features 
+        a = 0
 
 
     def get_params(self, as_dict=False):
@@ -24,8 +25,9 @@ class LinearWithParams(Linear):
             bias = params['bias']
             weight = params['weight']
         else:
-            bias = params[0]
-            weight = params[1:].reshape(self.weight.shape)
+            assert len(params) == self.n_params
+            bias = params[:self.out_features]
+            weight = params[self.out_features:].reshape(self.weight.shape)
         
         assert weight.shape == self.weight.shape, f'{weight.shape=}, {self.weight.shape=}'
         object.__setattr__(self, 'bias', bias)
@@ -56,7 +58,7 @@ class MLPWithParams(MLP):
         if as_dict:
             params = {}
             for i, l in enumerate(self.layers):
-                params[i] = l.get_params()
+                params[i] = l.get_params(as_dict=True)
             return params
         else:
             return jnp.concatenate([l.get_params(as_dict=False) for l in self.layers], axis=0)
@@ -64,7 +66,7 @@ class MLPWithParams(MLP):
     def set_params(self, params, as_dict=False):
         if as_dict:
             for l, d in zip(self.layers, params.values()):
-                l.set_params(d)
+                l.set_params(d, as_dict=True)
         else:
             counter = 0
             for l in self.layers:

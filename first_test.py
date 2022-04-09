@@ -83,7 +83,7 @@ def main(
     b = GatedODE(data_size, width=4, depth=2, key=key)
     model = NeuralODE(b=b)
 
-    norm_tracker = StatTracker(['loss_change'])
+    grad_tracker = StatTracker(['loss_change'])
 
     # Training loop like normal.
     #
@@ -94,17 +94,19 @@ def main(
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi):
         y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], True) 
-        return jnp.mean((yi[:, :, :2] - y_pred[:, :, :2]) ** 2) # in this example, only the first two dimensions are the output
+        return _loss_func(yi, y_pred) # in this example, only the first two dimensions are the output
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
-        # dLdt = loss_change.loss_change(model, grads, jnp.linspace(0, ti[-1], 10), yi)
-        dLdt = other_loss_change.loss_change_other(yi, ti, lambda x, xx: jnp.mean((x[:, :, :2] - xx[:, :, :2])**2), grads, model)
-        # norm_tracker.update({'loss_change': jnp.linalg.norm(dLdt, axis=-1)._value})
+        dLdt = other_loss_change.loss_change_other(yi, ti, _loss_func, grads, model)
+        grad_tracker.update({'loss_change': dLdt._value})
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
+
+    def _loss_func(y, y_pred):
+        return jnp.mean((y[:, :, :2] - y_pred[:, :, :2]) ** 2)
 
     for lr, steps, length in zip(lr_strategy, steps_strategy, length_strategy):
         optim = optax.adabelief(lr)
@@ -131,10 +133,10 @@ def main(
         plt.savefig("neural_ode2ode.png")
         plt.show()
 
-    return ts, ys, model, norm_tracker
+    return ts, ys, model, grad_tracker
 
 
-ts, ys, model, norm_tracker = main(
+ts, ys, model, grad_tracker = main(
     steps_strategy=(200, 200),
     print_every=100,
     batch_size=4,
@@ -157,6 +159,6 @@ with open('outputs/stats.pkl', 'wb') as handle:
     pickle.dump(model.get_stats(), handle)
 
 with open('outputs/grad_info.pkl', 'wb') as handle:
-    pickle.dump(norm_tracker.attributes['loss_change'], handle)
+    pickle.dump(grad_tracker.attributes['loss_change'], handle)
 
 

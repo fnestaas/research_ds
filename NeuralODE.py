@@ -6,19 +6,22 @@ from WeightDynamics import *
 
 
 class DynX(eqx.Module):
+    n_params: int
+
     """
     Dynamics by which the state evolves
     """
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+        self.n_params = 0
 
     def __call__(self, x):
         return x
 
-    def get_params(self):
+    def get_params(self, as_dict=False):
         return None
     
-    def set_params(self, params):
+    def set_params(self, params, as_dict=False):
         pass
 
 class Func(eqx.Module):
@@ -28,6 +31,7 @@ class Func(eqx.Module):
     b: WeightDynamics
     f: DynX
     d: int
+    n_params: int
 
     def __init__(self, b, f, **kwargs):
         super().__init__(**kwargs)
@@ -36,6 +40,7 @@ class Func(eqx.Module):
         self.d = b.d # dimension of x_t
         # dynamics by which x_t should evolve
         self.f = f
+        self.n_params = b.n_params + f.n_params
 
     def __call__(self, t, y, args):
         d = self.d
@@ -46,17 +51,26 @@ class Func(eqx.Module):
         
         return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
 
-    def get_params(self):
-        params = {}
-        params['b'] = self.b.get_params()
-        params['f'] = self.f.get_params()
-        return params
+    def get_params(self, as_dict=False):
+        if as_dict:
+            params = {}
+            params['b'] = self.b.get_params(as_dict=True)
+            params['f'] = self.f.get_params(as_dict=True)
+            return params
+        else:
+            return self.b.get_params(as_dict=False) # ignore f in this case
 
-    def set_params(self, params: dict):
-        self.b.set_params(params['b'])
-        if 'f' in params.keys():
-            self.f.set_params(params['f'])
-        
+    def set_params(self, params, as_dict=False):
+        if as_dict:
+            self.b.set_params(params['b'])
+            if 'f' in params.keys():
+                self.f.set_params(params['f'], as_dict=True)
+        else:
+            assert len(params) == self.n_params
+            self.b.set_params(params[:self.b.n_params], as_dict=False)
+            if self.b.n_params < len(params):
+                print('Setting params of f')
+                self.f.set_params(params[self.b.n_params:], as_dict=False)
 
 class StatTracker():
     """
@@ -73,12 +87,14 @@ class StatTracker():
 class NeuralODE(eqx.Module):
     func: Func
     stats: StatTracker
+    n_params: int
 
     def __init__(self, b, to_track=['num_steps', 'state_norm', 'grad_init'], **kwargs):
         super().__init__(**kwargs)
         f = DynX()
         self.func = Func(b, f, **kwargs)
         self.stats = StatTracker(to_track)
+        self.n_params = self.func.n_params
 
     def solve(self, ts, y0):
         solution = diffrax.diffeqsolve(
@@ -124,8 +140,16 @@ class NeuralODE(eqx.Module):
         else:
             return self.stats.attributes
 
-    def get_params(self):
-        return {'func': self.func.get_params()}
+    def get_params(self, as_dict=False):
+        if as_dict:
+            return {'func': self.func.get_params(as_dict=True)}
+        else: 
+            return self.func.get_params(as_dict=False)
 
-    def set_params(self, params: dict):
-        self.func.set_params(params['func'])
+    def set_params(self, params, as_dict=False):
+        if as_dict:
+            self.func.set_params(params['func'], as_dict=True)
+        else:
+            assert len(params) == self.n_params
+            self.func.set_params(params, as_dict=False)
+        

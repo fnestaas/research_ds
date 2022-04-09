@@ -55,7 +55,7 @@ class GatedODE(WeightDynamics):
                 key=key+i, # in order not to initialize identical networks
             ) for i in range(d)
         ]
-        self.n_params = int(sum([f.n_params for f in self.f]))
+        self.n_params = int(sum([f.n_params for f in self.f])) + d # parameters are f and a
 
     def __call__(self, W):
         d = self.d
@@ -70,16 +70,17 @@ class GatedODE(WeightDynamics):
         if as_dict:
             params = {}
             for i, f in enumerate(self.f):
-                params[i] = f.get_params()
+                params[i] = f.get_params(as_dict=True)
             return params
         else:
-            raise NotImplementedError
+            return jnp.concatenate([l.get_params(as_dict=False) for l in self.f] + [self.a], axis=0)
 
     def set_params(self, params, as_dict=False):
         if as_dict:
             for f, v in zip(self.f, params.values()):
-                f.set_params(v)
+                f.set_params(v, as_dict=True)
         else:
+            assert len(params) == self.n_params
             counter = 0
             for f in self.f:
                 p = params[counter:counter+f.n_params]

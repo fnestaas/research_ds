@@ -1,24 +1,30 @@
 import time
-
 import jax 
 import jax.numpy as jnp
 import jax.nn as jnn
 import jax.random as jrandom 
-
 import diffrax
 import equinox as eqx
-
 import matplotlib.pyplot as plt
-
 import optax
-
 import copy
+from WeightDynamics import * 
+from NeuralODE import *
 
-a = jrandom.normal(key=jrandom.PRNGKey(0), shape=(2, 2))
-print(a)
 
-f = lambda x: jnp.matmul(jnp.transpose(x), jnp.matmul(a, x))[0, 0]
+seed = 0
 
-x = jnp.ones(shape=(2, 1))
+d = 2
+width = 10
+depth = 2
+key = jrandom.PRNGKey(seed)
 
-print(jax.grad(f)(x))
+b = GatedODE(d=d, width=width, depth=depth, key=key)
+model = NeuralODE(b)
+
+print(model.n_params)
+
+params = model.get_params(as_dict=False)
+print(len(params))
+model.set_params(params, as_dict=False)
+a = 0
