@@ -1,41 +1,51 @@
 from copy import deepcopy
 import jax 
 import jax.numpy as jnp
+from numpy import save
 from loss_change import make_grads_callable, _fill_none
 from copy import deepcopy
+import diffrax
+from NeuralODE import Func
 
-def loss_change_other_very_wrong(y, t, loss_func, grad, model):
-    """
-    Compute a of shape (bs, t, y)
-    Compute func of shape (bs, t, y, thetas)
-    for each (b, t, y) there should be a func which contains the gradients of the params to specify that func
+class AdjointSolver():
+    func: Func 
 
-    func_bty = jax.grad(y_pred[b,t,y]).func
-    """
-    y_pred = jax.vmap(model, in_axes=(None, 0, None))(t, y[:, 0, :], False)
-    # callable_grad = make_grads_callable(model, grad)
+    def __init__(self, func, **kwargs) -> None:
+        b = func.b
+        f = func.f
+        self.func = Func(b, f, **kwargs)
+        self.func.set_params(func.get_params())
 
-    raise NotImplementedError # still have to fix this
-    # to_map = lambda x: jax.vmap(, in_axes=(None, 0, None))(t, x, None)
-    func = jax.vmap(to_map, in_axes=0)(y_pred)
-
-    to_diff = lambda x: loss_func(x, y)
-    a = jax.grad(to_diff)(y_pred) # notation adopted from NeuralODE paper
-    return #jnp.sum(a * func, axis=-1) # jnp.tensordot or something
-
-def _setter(f, t):
-    if f is not None:
-        return t 
-    return None
+    def solve(self, ts, loss_func, y, y_pred):
+        to_diff = lambda x: loss_func(x, y)
+        y0 = jax.grad(to_diff)(y_pred)
+        arg0 = diffrax.ODETerm(self.func)
+        arg1 = diffrax.Tsit5()
+        t0=ts[-1]
+        t1=ts[0] # solve backwards in time
+        dt0=ts[0] - ts[1]
+        stepsize_controller=diffrax.PIDController()
+        saveat=diffrax.SaveAt(ts=ts[::-1])
+        solution = diffrax.diffeqsolve(
+            arg0, 
+            arg1, 
+            y0=y0,
+            t0=t0,
+            t1=t1,
+            dt0=dt0,
+            stepsize_controller=stepsize_controller,
+            saveat=saveat,  
+            )
+        return solution.ys
 
 def make_func_callable(model, func):
     return jax.tree_map(_fill_none, model, func)
 
-def set_func_with_params(model, func, theta):
+def set_func_with_params(func, theta):
     # t = redict([theta[i] for i in range(theta.shape[0])], template)
-    func_ = deepcopy(func)
-    func_.set_params(theta, as_dict=False)
-    return func_
+    #func_ = deepcopy(func)
+    func.set_params(theta, as_dict=False)
+    return func
 
 def undict(d, structured=False, rm_none=True):
     """
@@ -72,17 +82,25 @@ def redict(l, template):
             return l
 
 def loss_change_other(y, t, loss_func, grad, model):
-    callable_func = make_func_callable(model.func, grad.func)
-    func_helper_helper = lambda theta, x: jax.vmap(set_func_with_params(model, callable_func, theta), in_axes=(None, 0, None))(t, x, None)
-    func_helper = lambda theta: jax.vmap(func_helper_helper, in_axes=(None, 0))(theta, y)
-    func_grad = jax.jacrev(func_helper)
+    callable_func = deepcopy(model.func) # deepcopy(make_func_callable(model.func, grad.func))
+    func_helper_helper = lambda th, x: jax.vmap(set_func_with_params(callable_func, th), in_axes=(None, 0, None))(t, x, None)
+    func_helper = lambda th: jax.vmap(func_helper_helper, in_axes=(None, 0))(th, y)
+    func_grad = jax.jacrev(func_helper) # grad of func wrt theta
 
     theta = callable_func.get_params()
     f_grd = func_grad(theta)
 
     y_pred = jax.vmap(model, in_axes=(None, 0, None))(t, y[:, 0, :], False)
     to_diff = lambda x: loss_func(x, y)
-    a = jax.grad(to_diff)(y_pred) # notation adopted from NeuralODE paper
+    # a_ = lambda y_: jax.grad(to_diff)(y_) # notation adopted from NeuralODE paper
+    # a = a_(jax.vmap(model, in_axes=(None, 0, None))(t, y[:, 0, :], False))
+
+    # # to_diff = lambda t_: loss_func(jax.vmap(model, in_axes=(None, 0, None))(t_, y[:, 0, :], False), y)
+    # # a = jax.grad(to_diff)(t)
+
+    a_solver = AdjointSolver(callable_func)
+    a = a_solver.solve(t, loss_func, y, y_pred)
+
     a_extended = jnp.repeat(jnp.expand_dims(a, axis=-1), f_grd.shape[-1], axis=-1)
     res = a_extended * f_grd
     return jnp.sum(res, axis=-2)
