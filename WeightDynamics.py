@@ -15,6 +15,10 @@ class WeightDynamics(eqx.Module):
         pass
 
 class IsoODE(WeightDynamics):
+    """
+    Implementation of IsoODE from Ode to ODE
+    Does not seem to work well
+    """
     _Q: jnp.ndarray 
     _N: jnp.ndarray 
     d: int
@@ -25,7 +29,6 @@ class IsoODE(WeightDynamics):
         self._N = mean + std*jrandom.normal(key=key, shape=(d, d))
         self.d = d
 
-    # @partial(jit, static_argnums=1)
     def __call__(self, W):
         Q = jnp.transpose(self._Q) + self._Q
         N = jnp.transpose(self._N) + self._N
@@ -36,14 +39,21 @@ class IsoODE(WeightDynamics):
 
 
 class GatedODE(WeightDynamics):
+    """
+    Implementation of GatedODE from Ode to ODE
+    """
     a: jnp.array # learnable weights for the neural network matrices
     f: list # list of neural networks
     d: int
+    width: int
+    depth: int
     n_params: int
 
     def __init__(self, d, width, key=None, depth=2, **kwargs):
         super().__init__(d, **kwargs)
         self.d = d
+        self.width = width
+        self.depth = depth
         self.a = jrandom.normal(key=key, shape=(d, ))
         self.f = [
             MLPWithParams( 
@@ -58,6 +68,9 @@ class GatedODE(WeightDynamics):
         self.n_params = int(sum([f.n_params for f in self.f])) + d # parameters are f and a
 
     def __call__(self, W):
+        """
+        Returns a skew symmetric matrix which is used to update W
+        """
         d = self.d
         fs = self.f
         w = jnp.reshape(W, (-1, d*d, ))

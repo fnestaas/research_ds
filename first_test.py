@@ -17,8 +17,6 @@ import pickle
 
 from WeightDynamics import * 
 from NeuralODE import *
-import loss_change
-import other_loss_change
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -30,12 +28,11 @@ def _get_data(ts, *, key):
     solver = diffrax.Tsit5()
     dt0 = 0.1
     saveat = diffrax.SaveAt(ts=ts)
-    sol = diffrax.diffeqsolve(
+    sol = diffrax.diffeqsolve( # TODO: is this expensive?
         diffrax.ODETerm(f), solver, ts[0], ts[-1], dt0, y0, saveat=saveat
     )
     ys = sol.ys
     return ys
-
 
 def get_data(dataset_size, *, key):
     ts = jnp.linspace(0, 10, 100)
@@ -50,9 +47,6 @@ def dataloader(arrays, batch_size, *, key):
     # we concatenate some orthogonal matrix to the state, as we use one dynamical system
     # to describe how the weights and state evolves
     cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
-    # a = 1/jnp.sqrt(2)
-    # b = -a
-    # cat = jnp.reshape(jnp.concatenate([jnp.array([[a, b], [-b, a]])]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
     while True:
         perm = jrandom.permutation(key, indices)
         (key,) = jrandom.split(key, 1)
@@ -85,11 +79,8 @@ def main(
 
     grad_tracker = StatTracker(['loss_change'])
 
-    # Training loop like normal.
-    #
-    # Only thing to notice is that up until step 500 we train on only the first 10% of
-    # each time series. This is a standard trick to avoid getting caught in a local
-    # minimum.
+    # Training loop where we train on only length_strategy[i] in the ith iteration
+    # This avoids getting stuck in a local minimum
 
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi):
@@ -100,8 +91,11 @@ def main(
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
-        dLdt = other_loss_change.loss_change_other(yi, ti, _loss_func, grads, model)
-        grad_tracker.update({'loss_change': dLdt._value})
+        y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) 
+        dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[0, -1, :] # end state of the adjoint
+        end_state_loss = jnp.zeros((model.n_params, ))
+        joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, 0, :]], axis=-1)
+        backward_pass = model.backward(ti, joint_end_state)
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
 
@@ -139,7 +133,7 @@ def main(
 ts, ys, model, grad_tracker = main(
     steps_strategy=(200, 200),
     print_every=100,
-    batch_size=4,
+    batch_size=50,
     length_strategy=(.1, 1),
     lr_strategy=(3e-3, 1e-3),
     plot=True, 

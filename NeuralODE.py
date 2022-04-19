@@ -1,3 +1,4 @@
+from xmlrpc.client import boolean
 import jax.numpy as jnp
 import jax
 import diffrax
@@ -85,18 +86,27 @@ class StatTracker():
         
 
 class NeuralODE(eqx.Module):
+    """
+    Neural ODE that can track statistics and perform forward and backward passes to 
+    copmute solutions to an initial state, the adjoint, and gradients of the parameters
+    """
     func: Func
     stats: StatTracker
     n_params: int
+    d: int
 
     def __init__(self, b, to_track=['num_steps', 'state_norm', 'grad_init'], **kwargs):
         super().__init__(**kwargs)
-        f = DynX()
-        self.func = Func(b, f, **kwargs)
+        f = DynX() # function that specifies \dot{x} = f(Wx)
+        self.func = Func(b, f, **kwargs) # function that specifies the complete system dynamics
         self.stats = StatTracker(to_track)
         self.n_params = self.func.n_params
+        self.d = self.func.d
 
     def solve(self, ts, y0):
+        """
+        Compute solution at times ts with initial state y0
+        """
         solution = diffrax.diffeqsolve(
             diffrax.ODETerm(self.func),
             diffrax.Tsit5(),
@@ -109,7 +119,64 @@ class NeuralODE(eqx.Module):
         )
         return solution
 
+    def func_with_params(self, params):
+        """
+        Generate a Func with parameters params;
+        useful e.g. when computing the derivative of such a Func wrt its parameters
+        """
+        key = jrandom.PRNGKey(0)
+        b = GatedODE(self.d, width=self.func.b.width, depth=self.func.b.depth, key=key)
+        f = DynX()
+        func = Func(b, f)
+        func.set_params(params, as_dict=False)
+        return func
+
+    def full_term(self, t, joint_state, args):
+        """
+        Callable term to perform a backward pass to compute the adjoint, parameter gradients
+        as a function of time, and the solution itself (needed to compute the others)
+        
+        returns [a d func / d z, -a d func / d theta, -func] 
+        """
+        n = self.d * (self.d + 1)
+        adjoint = joint_state[:n]
+        x = joint_state[-n:]
+
+        dfdz = jax.jacrev(lambda z: self.func(t, z, args))
+        dfdth = jax.jacrev(lambda th: self.func_with_params(th)(t, x, args))
+
+        t1 = adjoint @ dfdz(x)
+        t2 = - adjoint @ dfdth(self.func.get_params(as_dict=False))
+        t3 = - self.func(t, x, args)
+
+        return jnp.concatenate([t1, t2, t3])
+
+    def backward(self, ts, joint_end_state):
+        """
+        Perform a backward pass through the NeuralODE
+        joint_end_state is the final state, it contains the values of the
+        adjoint, loss gradient wrt the parameters and state at the end time
+        """
+        term = self.full_term
+        saveat = diffrax.SaveAt(ts=ts[::-1])#diffrax.SaveAt(t0=True, t1=True)#
+        solution = diffrax.diffeqsolve(
+            diffrax.ODETerm(term),
+            diffrax.Tsit5(),
+            t0=ts[-1],
+            t1=ts[0],
+            dt0=-(ts[1]-ts[0]),
+            y0=joint_end_state,
+            stepsize_controller=diffrax.PIDController(),
+            saveat=saveat,
+        )
+        return solution
+
     def __call__(self, ts, y0, update=False): 
+        """
+        Compute the solution according to this NeuralODE at times ts with
+        initial state y0. The parameter update specifies whether to save the
+        solver statistics in this pass.
+        """
         solution = self.solve(ts, y0)
         y_pred = solution.ys
         if update:
@@ -118,6 +185,9 @@ class NeuralODE(eqx.Module):
         return y_pred
     
     def compute_stats(self, solution, ts, y0):
+        """
+        Updates the statistics contained in self.stats
+        """
         keys = list(self.stats.attributes.keys())
         res = {key: [] for key in keys}
         if 'num_steps' in keys:
