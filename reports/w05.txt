@@ -1,0 +1,16 @@
+Notes week 5
+
+How to run python on euler exactly?
+- See slack
+
+Look into ssh (deployment) from vscode on cluster
+
+This week:
+Discovered bugs in last implementation
+Made first steps to implement adjoint, however, there are some bugs that I do not understand
+
+Next week:
+Implement adjoint in the same way that Lenart did
+Work on theory
+Look into deployment to cluster from vscode
+
