@@ -1,0 +1,47 @@
+Notes week 6
+
+Made progress both theory- and implementation-wise
+
+Theory:
+Read a number of papers:
+https://arxiv.org/pdf/1902.09689.pdf
+Antisymmetric RNN
+
+http://proceedings.mlr.press/v80/helfrich18a/helfrich18a.pdf
+Parameterization of orthogonal weights using scaled Caley Transform
+
+https://arxiv.org/pdf/1705.03341.pdf 
+Regularize rapidly changing dynamics
+
+Showed that if we have a system
+\dot{x} = Ax
+where A is anti-symmetric, then x(t) is linear in the initial state, which is not desirable
+
+Related our approaches to existing approaches, see overleaf
+
+Showed that enforcing d^2 L/(dt d\theta) to have constant norm means that the gradient at any time $t$ 
+is linear in the initial gradient, and derived a partial differential equation for dynamics which 
+fulfill this criterion. Pathologies still exist however.
+
+
+
+Implementation:
+Implemented NeuralODE.backward, which computes the adjoint as a function of time, as well as the gradient 
+and the corresponding solution. The implementation is not very efficient right now, but seems to be 
+correct. Also documented more code.
+
+Did not run code on cluster since I mainly did theory work this week
+
+
+Questions:
+Are real orthogonal matrices diagonalizable? Yes, see 'defective matrices' on Wikipedia
+
+
+Next week:
+Keep working on the theory, especially relations to other methods
+Read more papers (e.g. https://web.stanford.edu/class/archive/cs/cs224n/cs224n.1194/reports/custom/15842215.pdf )
+Investigate behavior of adjoint for different methods
+Fix A and try to solve diffeq (e.g. NN with depth ... layers ...)
+Read about gradient alignment problem
+Bias in (7) or activation function without bias
+Read up on Gradient alignment
