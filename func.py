@@ -95,7 +95,7 @@ class PDEFunc(eqx.Module):
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
 
     def __call__(self, ts, x, args):
-        f0 = jnp.zeros(x.shape)#self.init_nn(x) # predict initial value of f
+        f0 = self.init_nn(x) # predict initial value of f
         f = diffrax.diffeqsolve(
             diffrax.ODETerm(lambda s, fct, args: self.g_term(s, fct, x, args)),
             diffrax.Tsit5(),
