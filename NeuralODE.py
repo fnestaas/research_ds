@@ -4,74 +4,75 @@ import jax
 import diffrax
 import equinox as eqx
 from WeightDynamics import * 
+from func import *
 
 
-class DynX(eqx.Module):
-    n_params: int
+# class DynX(eqx.Module):
+#     n_params: int
 
-    """
-    Dynamics by which the state evolves
-    """
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.n_params = 0
+#     """
+#     Dynamics by which the state evolves
+#     """
+#     def __init__(self, **kwargs) -> None:
+#         super().__init__(**kwargs)
+#         self.n_params = 0
 
-    def __call__(self, x):
-        return x
+#     def __call__(self, x):
+#         return x
 
-    def get_params(self, as_dict=False):
-        return None
+#     def get_params(self, as_dict=False):
+#         return None
     
-    def set_params(self, params, as_dict=False):
-        pass
+#     def set_params(self, params, as_dict=False):
+#         pass
 
-class Func(eqx.Module):
-    """
-    Complete dynamics of the system; keeps track of how the weights and state evolve.
-    """
-    b: WeightDynamics
-    f: DynX
-    d: int
-    n_params: int
+# class Func(eqx.Module):
+#     """
+#     Complete dynamics of the system; keeps track of how the weights and state evolve.
+#     """
+#     b: WeightDynamics
+#     f: DynX
+#     d: int
+#     n_params: int
 
-    def __init__(self, b, f, **kwargs):
-        super().__init__(**kwargs)
-        # dynamics by which W_t should evolve
-        self.b = b
-        self.d = b.d # dimension of x_t
-        # dynamics by which x_t should evolve
-        self.f = f
-        self.n_params = b.n_params + f.n_params
+#     def __init__(self, b, f, **kwargs):
+#         super().__init__(**kwargs)
+#         # dynamics by which W_t should evolve
+#         self.b = b
+#         self.d = b.d # dimension of x_t
+#         # dynamics by which x_t should evolve
+#         self.f = f
+#         self.n_params = b.n_params + f.n_params
 
-    def __call__(self, t, y, args):
-        d = self.d
-        x = y[:d] 
-        W = jnp.reshape(y[d:], newshape=(d, d))
-        f = self.f(jnp.matmul(W, x))
-        bw = jnp.matmul(W, self.b(W))
+#     def __call__(self, t, y, args):
+#         d = self.d
+#         x = y[:d] 
+#         W = jnp.reshape(y[d:], newshape=(d, d))
+#         f = self.f(jnp.matmul(W, x))
+#         bw = jnp.matmul(W, self.b(W))
         
-        return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
+#         return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            params = {}
-            params['b'] = self.b.get_params(as_dict=True)
-            params['f'] = self.f.get_params(as_dict=True)
-            return params
-        else:
-            return self.b.get_params(as_dict=False) # ignore f in this case
+#     def get_params(self, as_dict=False):
+#         if as_dict:
+#             params = {}
+#             params['b'] = self.b.get_params(as_dict=True)
+#             params['f'] = self.f.get_params(as_dict=True)
+#             return params
+#         else:
+#             return self.b.get_params(as_dict=False) # ignore f in this case
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            self.b.set_params(params['b'])
-            if 'f' in params.keys():
-                self.f.set_params(params['f'], as_dict=True)
-        else:
-            assert len(params) == self.n_params
-            self.b.set_params(params[:self.b.n_params], as_dict=False)
-            if self.b.n_params < len(params):
-                print('Setting params of f')
-                self.f.set_params(params[self.b.n_params:], as_dict=False)
+#     def set_params(self, params, as_dict=False):
+#         if as_dict:
+#             self.b.set_params(params['b'])
+#             if 'f' in params.keys():
+#                 self.f.set_params(params['f'], as_dict=True)
+#         else:
+#             assert len(params) == self.n_params
+#             self.b.set_params(params[:self.b.n_params], as_dict=False)
+#             if self.b.n_params < len(params):
+#                 print('Setting params of f')
+#                 self.f.set_params(params[self.b.n_params:], as_dict=False)
 
 class StatTracker():
     """
@@ -95,10 +96,11 @@ class NeuralODE(eqx.Module):
     n_params: int
     d: int
 
-    def __init__(self, b, to_track=['num_steps', 'state_norm', 'grad_init'], **kwargs):
+    def __init__(self, func, to_track=['num_steps', 'state_norm', 'grad_init'], **kwargs):
         super().__init__(**kwargs)
-        f = DynX() # function that specifies \dot{x} = f(Wx)
-        self.func = Func(b, f, **kwargs) # function that specifies the complete system dynamics
+        # f = DynX() # function that specifies \dot{x} = f(Wx)
+        # self.func = Func(b, f, **kwargs) # function that specifies the complete system dynamics
+        self.func = func
         self.stats = StatTracker(to_track)
         self.n_params = self.func.n_params
         self.d = self.func.d
@@ -158,7 +160,7 @@ class NeuralODE(eqx.Module):
         adjoint, loss gradient wrt the parameters and state at the end time
         """
         term = self.full_term
-        saveat = diffrax.SaveAt(ts=ts[::-1])#diffrax.SaveAt(t0=True, t1=True)#
+        saveat = diffrax.SaveAt(ts=ts[::-1]) # diffrax doesn't work otherwise
         solution = diffrax.diffeqsolve(
             diffrax.ODETerm(term),
             diffrax.Tsit5(),

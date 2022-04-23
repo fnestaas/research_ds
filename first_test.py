@@ -17,6 +17,7 @@ import pickle
 
 from WeightDynamics import * 
 from NeuralODE import *
+from func import *
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -40,13 +41,14 @@ def get_data(dataset_size, *, key):
     ys = jax.vmap(lambda key: _get_data(ts, key=key))(key)
     return ts, ys
 
-def dataloader(arrays, batch_size, *, key):
+def dataloader(arrays, batch_size, *, key, concat=True):
     dataset_size, n_timestamps, n_dim = arrays[0].shape
     assert all(array.shape[0] == dataset_size for array in arrays)
     indices = jnp.arange(dataset_size)
     # we concatenate some orthogonal matrix to the state, as we use one dynamical system
     # to describe how the weights and state evolves
-    cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
+    if concat:
+        cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
     while True:
         perm = jrandom.permutation(key, indices)
         (key,) = jrandom.split(key, 1)
@@ -54,7 +56,10 @@ def dataloader(arrays, batch_size, *, key):
         end = batch_size
         while end < dataset_size:
             batch_perm = perm[start:end]
-            yield tuple(jnp.concatenate([array[batch_perm], cat], axis=-1) for array in arrays)
+            if concat:
+                yield tuple(jnp.concatenate([array[batch_perm], cat], axis=-1) for array in arrays)
+            else:
+                yield tuple(array[batch_perm] for array in arrays)
             start = end
             end = start + batch_size
 
@@ -74,8 +79,11 @@ def main(
     ts, ys = get_data(dataset_size, key=data_key)
     _, length_size, data_size = ys.shape
 
-    b = GatedODE(data_size, width=4, depth=2, key=key)
-    model = NeuralODE(b=b)
+    # b = GatedODE(data_size, width=4, depth=2, key=key)
+    # f = DynX()
+    # func = Func(b, f)
+    func = PDEFunc(d=2, width_size=4, depth=2)
+    model = NeuralODE(func=func)
 
     grad_tracker = StatTracker(['loss_change'])
 
@@ -84,7 +92,7 @@ def main(
 
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi):
-        y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], True) 
+        y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) # TODO: to track stats, use True instead
         return _loss_func(yi, y_pred) # in this example, only the first two dimensions are the output
 
     # @eqx.filter_jit
@@ -95,7 +103,7 @@ def main(
         dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[0, -1, :] # end state of the adjoint
         end_state_loss = jnp.zeros((model.n_params, ))
         joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, 0, :]], axis=-1)
-        backward_pass = model.backward(ti, joint_end_state)
+        # backward_pass = model.backward(ti, joint_end_state)
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
 
@@ -108,7 +116,7 @@ def main(
         _ts = ts[: int(length_size * length)]
         _ys = ys[:, : int(length_size * length)] # length is the fraction of timestamps on which we train
         for step, (yi,) in zip( 
-            range(steps), dataloader((_ys,), batch_size, key=loader_key)
+            range(steps), dataloader((_ys,), batch_size, key=loader_key, concat=False)
         ):
             start = time.time()
             loss, model, opt_state = make_step(_ts, yi, model, opt_state)
@@ -119,7 +127,8 @@ def main(
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.array([1, 0, 0, 1])]))
+        # model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.array([1, 0, 0, 1])]))
+        model_y = model(ts, ys[0, 0])
         plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
         plt.plot(ts, model_y[:, 1], c="crimson")
         plt.legend()

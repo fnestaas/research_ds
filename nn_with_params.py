@@ -34,7 +34,6 @@ class LinearWithParams(Linear):
         object.__setattr__(self, 'weight', weight)
 
 
-
 class MLPWithParams(MLP):
     layers: List[LinearWithParams]
     n_params: int
