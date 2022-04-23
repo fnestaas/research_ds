@@ -89,30 +89,34 @@ class PDEFunc(eqx.Module):
         in_size = d 
         out_size = d 
         self.init_nn = MLPWithParams(in_size, out_size, width_size, depth, key=k1) # predicts initial conditions
-        self.grad_nn = MLPWithParams(in_size, out_size*out_size, width_size, depth, key=k2) # predicts gradient of f
+        grad_out = int((d - 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d, d)
+        self.grad_nn = MLPWithParams(in_size, grad_out, width_size, depth, key=k2) # predicts gradient of f
 
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
 
     def __call__(self, ts, x, args):
-        f0 = self.init_nn(x) # predict initial value of f
+        f0 = jnp.zeros(x.shape)#self.init_nn(x) # predict initial value of f
         f = diffrax.diffeqsolve(
             diffrax.ODETerm(lambda s, fct, args: self.g_term(s, fct, x, args)),
             diffrax.Tsit5(),
             t0=0.,
             t1=1.,
-            dt0=.01, 
+            dt0=.1, 
             y0=f0,
             stepsize_controller=diffrax.PIDController(),
             saveat=diffrax.SaveAt(t0=False, t1=True),
         )
-        out = f.ys.reshape(f0.shape) # + f0 # diffrax adds f0 automatically
+        out = f.ys.reshape(f0.shape)
         return out
 
 
     def g_term(self, t, f, x, args):
         d = self.d
         out = self.grad_nn(t*x) # \nabla f(t*x)
-        return jnp.reshape(out, (d, d)) @ x
+        out = jnp.concatenate([out, jnp.zeros(d*d - out.shape[0])]) # make conformable to (d, d)-matrix
+        out = jnp.reshape(out, (d, d))
+        out = out - jnp.transpose(out)
+        return out @ x
 
     def get_params(self, as_dict=False):
         if as_dict:

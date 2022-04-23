@@ -19,6 +19,10 @@ from WeightDynamics import *
 from NeuralODE import *
 from func import *
 
+TRACK_STATS = False 
+WHICH_FUNC = 'PDEFunc'
+DO_BACKWARD = False
+
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
 
@@ -79,10 +83,14 @@ def main(
     ts, ys = get_data(dataset_size, key=data_key)
     _, length_size, data_size = ys.shape
 
-    # b = GatedODE(data_size, width=4, depth=2, key=key)
-    # f = DynX()
-    # func = Func(b, f)
-    func = PDEFunc(d=2, width_size=4, depth=2)
+    if WHICH_FUNC == 'Func':
+        b = GatedODE(data_size, width=4, depth=2, key=key)
+        f = DynX()
+        func = Func(b, f)
+    
+    elif WHICH_FUNC == 'PDEFunc':
+        func = PDEFunc(d=2, width_size=4, depth=2)
+    
     model = NeuralODE(func=func)
 
     grad_tracker = StatTracker(['loss_change'])
@@ -92,18 +100,21 @@ def main(
 
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi):
-        y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) # TODO: to track stats, use True instead
+        y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], TRACK_STATS)
         return _loss_func(yi, y_pred) # in this example, only the first two dimensions are the output
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
-        y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) 
-        dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[0, -1, :] # end state of the adjoint
-        end_state_loss = jnp.zeros((model.n_params, ))
-        joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, 0, :]], axis=-1)
-        # backward_pass = model.backward(ti, joint_end_state)
+
+        if DO_BACKWARD: # TODO: makes more sense to not compute grads in grad_loss in this case; skip that computation in that case
+            y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) 
+            dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[0, -1, :] # end state of the adjoint
+            end_state_loss = jnp.zeros((model.n_params, ))
+            joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, 0, :]], axis=-1)
+            backward_pass = model.backward(ti, joint_end_state)
+        
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
 
@@ -149,19 +160,20 @@ ts, ys, model, grad_tracker = main(
     dataset_size=100,
 )
 
-with open('outputs/num_steps.pkl', 'wb') as handle:
-    pickle.dump(model.get_stats()['num_steps'], handle)
+if TRACK_STATS:
+    with open('outputs/num_steps.pkl', 'wb') as handle:
+        pickle.dump(model.get_stats()['num_steps'], handle)
 
-with open('outputs/state_norm.pkl', 'wb') as handle:
-    pickle.dump(model.get_stats()['state_norm'], handle)
+    with open('outputs/state_norm.pkl', 'wb') as handle:
+        pickle.dump(model.get_stats()['state_norm'], handle)
 
-with open('outputs/grad_init.pkl', 'wb') as handle:
-    pickle.dump(model.get_stats()['grad_init'], handle)
+    with open('outputs/grad_init.pkl', 'wb') as handle:
+        pickle.dump(model.get_stats()['grad_init'], handle)
 
-with open('outputs/stats.pkl', 'wb') as handle:
-    pickle.dump(model.get_stats(), handle)
+    with open('outputs/stats.pkl', 'wb') as handle:
+        pickle.dump(model.get_stats(), handle)
 
-with open('outputs/grad_info.pkl', 'wb') as handle:
-    pickle.dump(grad_tracker.attributes['loss_change'], handle)
+    with open('outputs/grad_info.pkl', 'wb') as handle:
+        pickle.dump(grad_tracker.attributes['loss_change'], handle)
 
 
