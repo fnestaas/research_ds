@@ -74,45 +74,42 @@ class Func(eqx.Module):
                 self.f.set_params(params[self.b.n_params:], as_dict=False)
 
 class PDEFunc(eqx.Module):
-    init_nn: MLPWithParams
+    # init_nn: MLPWithParams
     grad_nn: MLPWithParams
     d: int
     n_params: int
+    L: float
 
-    def __init__(self, d: int, width_size: int, depth: int, seed=0, **kwargs) -> None:
+    def __init__(self, d: int, L: float, width_size: int, depth: int, seed=0, **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.d = d
+        self.L = L
 
         key = jrandom.PRNGKey(seed)
         k1, k2 = jrandom.split(key, 2)
-        in_size = d 
-        out_size = d 
-        self.init_nn = MLPWithParams(in_size, out_size, width_size, depth, key=k1) # predicts initial conditions
-        grad_out = int((d - 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d, d)
+        in_size = d + 1
+        out_size = d + 1
+        # self.init_nn = MLPWithParams(in_size+1, out_size+1, width_size, depth, key=k1) # predicts initial conditions
+        grad_out = int((d + 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d, d)
         self.grad_nn = MLPWithParams(in_size, grad_out, width_size, depth, key=k2) # predicts gradient of f
 
-        self.n_params = self.init_nn.n_params + self.grad_nn.n_params
+        # self.n_params = self.init_nn.n_params + self.grad_nn.n_params
+        self.n_params = self.grad_nn.n_params
 
     def __call__(self, ts, x, args):
-        f0 = self.init_nn(x) # predict initial value of f
-        f = diffrax.diffeqsolve(
-            diffrax.ODETerm(lambda s, fct, args: self.g_term(s, fct, x, args)),
-            diffrax.Tsit5(),
-            t0=0.,
-            t1=1.,
-            dt0=.1, 
-            y0=f0,
-            stepsize_controller=diffrax.PIDController(),
-            saveat=diffrax.SaveAt(t0=False, t1=True),
-        )
-        out = f.ys.reshape(f0.shape)
-        return out
+        # integrate
+        z = jnp.concatenate([x, jnp.array([self.L])])
+        y = jax.vmap(self.integrand, in_axes=(None, 0))(z, jnp.linspace(0, 1, 101)) # A(sx)x
+        integral = jnp.trapz(y, dx=.01, axis=0)
 
+        assert integral.shape == (self.d+1, ), f'shape of integral is {integral.shape}'
 
-    def g_term(self, t, f, x, args):
-        d = self.d
-        out = self.grad_nn(t*x) # \nabla f(t*x)
+        return integral[:self.d] # + self.integrand(z, 0)[:self.d]
+
+    def integrand(self, x, s):
+        d = self.d + 1
+        out = self.grad_nn(s*x) # \nabla f(s*x)
         out = jnp.concatenate([out, jnp.zeros(d*d - out.shape[0])]) # make conformable to (d, d)-matrix
         out = jnp.reshape(out, (d, d))
         out = out - jnp.transpose(out)
@@ -121,11 +118,12 @@ class PDEFunc(eqx.Module):
     def get_params(self, as_dict=False):
         if as_dict:
             raise NotImplementedError
-        return jnp.concatenate([self.init_nn.get_params(as_dict=as_dict), self.grad_nn.get_params(as_dict=as_dict)])
+        # return jnp.concatenate([self.init_nn.get_params(as_dict=as_dict), self.grad_nn.get_params(as_dict=as_dict)])
+        return self.grad_nn.get_params(as_dict=as_dict)
 
     def set_params(self, params, as_dict=False):
         if as_dict:
             raise NotImplementedError 
         divide = self.init_nn.n_params
-        self.init_nn.set_params(params[:divide], as_dict=as_dict)
+        # self.init_nn.set_params(params[:divide], as_dict=as_dict)
         self.grad_nn.set_params(params[divide:], as_dict=as_dict)

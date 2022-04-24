@@ -19,6 +19,10 @@ from WeightDynamics import *
 from NeuralODE import *
 from func import *
 
+from jax.config import config
+
+# config.update('jax_disable_jit', True)
+
 TRACK_STATS = False 
 WHICH_FUNC = 'PDEFunc'
 DO_BACKWARD = False
@@ -45,14 +49,13 @@ def get_data(dataset_size, *, key):
     ys = jax.vmap(lambda key: _get_data(ts, key=key))(key)
     return ts, ys
 
-def dataloader(arrays, batch_size, *, key, concat=True):
+def dataloader(arrays, batch_size, *, key, cat_dim=2):
     dataset_size, n_timestamps, n_dim = arrays[0].shape
     assert all(array.shape[0] == dataset_size for array in arrays)
     indices = jnp.arange(dataset_size)
     # we concatenate some orthogonal matrix to the state, as we use one dynamical system
     # to describe how the weights and state evolves
-    if concat:
-        cat = jnp.reshape(jnp.concatenate([jnp.eye(n_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, n_dim**2))
+    cat = jnp.reshape(jnp.concatenate([jnp.eye(cat_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, cat_dim**2))
     while True:
         perm = jrandom.permutation(key, indices)
         (key,) = jrandom.split(key, 1)
@@ -60,7 +63,7 @@ def dataloader(arrays, batch_size, *, key, concat=True):
         end = batch_size
         while end < dataset_size:
             batch_perm = perm[start:end]
-            if concat:
+            if cat_dim > 0:
                 yield tuple(jnp.concatenate([array[batch_perm], cat], axis=-1) for array in arrays)
             else:
                 yield tuple(array[batch_perm] for array in arrays)
@@ -89,7 +92,7 @@ def main(
         func = Func(b, f)
     
     elif WHICH_FUNC == 'PDEFunc':
-        func = PDEFunc(d=2, width_size=4, depth=2)
+        func = PDEFunc(d=2, width_size=4, depth=2, L=2)
     
     model = NeuralODE(func=func)
 
@@ -105,7 +108,7 @@ def main(
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
-        loss, grads = grad_loss(model, ti, yi)
+        loss, grads = grad_loss(model, ti, yi) # TODO: this is extremely slow, try implementing a backward pass instead
         updates, opt_state = optim.update(grads, opt_state)
 
         if DO_BACKWARD: # TODO: makes more sense to not compute grads in grad_loss in this case; skip that computation in that case
@@ -127,7 +130,7 @@ def main(
         _ts = ts[: int(length_size * length)]
         _ys = ys[:, : int(length_size * length)] # length is the fraction of timestamps on which we train
         for step, (yi,) in zip( 
-            range(steps), dataloader((_ys,), batch_size, key=loader_key, concat=False)
+            range(steps), dataloader((_ys,), batch_size, key=loader_key, cat_dim=0)
         ):
             start = time.time()
             loss, model, opt_state = make_step(_ts, yi, model, opt_state)
@@ -138,7 +141,7 @@ def main(
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        # model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.array([1, 0, 0, 1])]))
+        # model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.eye(1).reshape((-1, ))]))
         model_y = model(ts, ys[0, 0])
         plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
         plt.plot(ts, model_y[:, 1], c="crimson")
