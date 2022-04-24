@@ -37,10 +37,21 @@ class LinearWithParams(Linear):
 class MLPWithParams(MLP):
     layers: List[LinearWithParams]
     n_params: int
+    in_size: int 
+    out_size: int
+    width_size: int 
+    depth: int
+    activation: Callable
 
     def __init__(self, in_size: int, out_size: int, width_size: int, depth: int, activation: Callable = jnn.relu, final_activation: Callable = _identity, *, key: "jax.random.PRNGKey", **kwargs):
         super().__init__(in_size, out_size, width_size, depth, activation, final_activation, key=key, **kwargs)
         
+        self.in_size = in_size
+        self.out_size = out_size
+        self.width_size = width_size
+        self.depth = depth
+        self.activation = activation
+
         keys = jrandom.split(key, depth + 1)
         layers = []
         if depth == 0:

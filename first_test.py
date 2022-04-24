@@ -15,6 +15,8 @@ import optax
 
 import pickle
 
+from torch import isin
+
 from WeightDynamics import * 
 from NeuralODE import *
 from func import *
@@ -23,9 +25,9 @@ from jax.config import config
 
 # config.update('jax_disable_jit', True)
 
-TRACK_STATS = False 
+TRACK_STATS = True 
 WHICH_FUNC = 'PDEFunc'
-DO_BACKWARD = False
+DO_BACKWARD = True
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -90,9 +92,13 @@ def main(
         b = GatedODE(data_size, width=4, depth=2, key=key)
         f = DynX()
         func = Func(b, f)
+        cat_dim = 2
     
     elif WHICH_FUNC == 'PDEFunc':
-        func = PDEFunc(d=2, width_size=4, depth=2, L=2)
+        func = PDEFunc(d=2, width_size=4, depth=2, L=0)
+        cat_dim = 0
+    else:
+        raise NotImplementedError
     
     model = NeuralODE(func=func)
 
@@ -115,8 +121,16 @@ def main(
             y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) 
             dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[0, -1, :] # end state of the adjoint
             end_state_loss = jnp.zeros((model.n_params, ))
-            joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, 0, :]], axis=-1)
+            # TODO: was y_pred[0, 0, :]
+            joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, -1, :]], axis=-1)
             backward_pass = model.backward(ti, joint_end_state)
+
+            n_adj = len(dLdT)
+            adjoint = backward_pass.ys[:, :n_adj]
+            adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
+            if TRACK_STATS:
+                grad_tracker.update({'loss_change': backward_pass.ys})
+            
         
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
@@ -130,7 +144,7 @@ def main(
         _ts = ts[: int(length_size * length)]
         _ys = ys[:, : int(length_size * length)] # length is the fraction of timestamps on which we train
         for step, (yi,) in zip( 
-            range(steps), dataloader((_ys,), batch_size, key=loader_key, cat_dim=0)
+            range(steps), dataloader((_ys,), batch_size, key=loader_key, cat_dim=cat_dim)
         ):
             start = time.time()
             loss, model, opt_state = make_step(_ts, yi, model, opt_state)
@@ -165,18 +179,22 @@ ts, ys, model, grad_tracker = main(
 
 if TRACK_STATS:
     with open('outputs/num_steps.pkl', 'wb') as handle:
-        pickle.dump(model.get_stats()['num_steps'], handle)
+        to_save = model.get_stats()['num_steps']
+        pickle.dump(to_save.val, handle)
 
     with open('outputs/state_norm.pkl', 'wb') as handle:
-        pickle.dump(model.get_stats()['state_norm'], handle)
+        to_save = model.get_stats()['state_norm']
+        pickle.dump(to_save.val, handle)
 
     with open('outputs/grad_init.pkl', 'wb') as handle:
-        pickle.dump(model.get_stats()['grad_init'], handle)
+        to_save = model.get_stats()['grad_init']
+        pickle.dump(to_save.val, handle)
 
-    with open('outputs/stats.pkl', 'wb') as handle:
-        pickle.dump(model.get_stats(), handle)
+    # with open('outputs/stats.pkl', 'wb') as handle:
+    #     pickle.dump(model.get_stats(), handle)
 
     with open('outputs/grad_info.pkl', 'wb') as handle:
-        pickle.dump(grad_tracker.attributes['loss_change'], handle)
+        to_save = grad_tracker.attributes['loss_change']
+        pickle.dump(to_save.val, handle)
 
 

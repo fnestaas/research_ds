@@ -65,7 +65,7 @@ class NeuralODE(eqx.Module):
         func.set_params(params, as_dict=False)
         return func
 
-    def full_term(self, t, joint_state, args):
+    def full_term_func(self, t, joint_state, args):
         """
         Callable term to perform a backward pass to compute the adjoint, parameter gradients
         as a function of time, and the solution itself (needed to compute the others)
@@ -85,13 +85,35 @@ class NeuralODE(eqx.Module):
 
         return jnp.concatenate([t1, t2, t3])
 
+    def pdefunc_with_params(self, params):
+        func = PDEFunc(self.func.d, self.func.L, self.func.grad_nn.width_size, self.func.grad_nn.depth)
+        func.set_params(params, as_dict=False)
+        return func
+
+    def full_term_pdefunc(self, t, joint_state, args):
+        n = self.func.d
+        adjoint = joint_state[:n]
+        x = joint_state[-n:]
+
+        dfdz = jax.jacrev(lambda z: self.func(t, z, args))
+        dfdth = jax.jacrev(lambda th: self.pdefunc_with_params(th)(t, x, args))
+
+        t1 = adjoint @ dfdz(x)
+        t2 = - adjoint @ dfdth(self.func.get_params(as_dict=False))
+        t3 = - self.func(t, x, args)
+
+        return jnp.concatenate([t1, t2, t3])
+
     def backward(self, ts, joint_end_state):
         """
         Perform a backward pass through the NeuralODE
         joint_end_state is the final state, it contains the values of the
         adjoint, loss gradient wrt the parameters and state at the end time
         """
-        term = self.full_term
+        if isinstance(self.func, Func):
+            term = self.full_term_func
+        elif isinstance(self.func, PDEFunc):
+            term = self.full_term_pdefunc
         saveat = diffrax.SaveAt(ts=ts[::-1]) # diffrax doesn't work otherwise
         solution = diffrax.diffeqsolve(
             diffrax.ODETerm(term),
@@ -125,13 +147,13 @@ class NeuralODE(eqx.Module):
         keys = list(self.stats.attributes.keys())
         res = {key: [] for key in keys}
         if 'num_steps' in keys:
-            res['num_steps'] = solution.stats['num_steps'].val
+            res['num_steps'] = solution.stats['num_steps']
         if 'state_norm' in keys:
             y_pred = solution.ys
-            res['state_norm'] = jnp.linalg.norm(y_pred).val.aval.val
+            res['state_norm'] = jnp.linalg.norm(y_pred)
         if 'grad_init' in keys:
             to_grad = lambda y: self.solve(ts, y)
-            res['grad_init'] = jax.jacfwd(to_grad)(y0).ys[-1, :, :].val.aval.val._value
+            res['grad_init'] = jax.jacfwd(to_grad)(y0).ys[-1, :, :]
         return res
     
     def get_stats(self, which=None):

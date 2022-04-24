@@ -74,56 +74,64 @@ class Func(eqx.Module):
                 self.f.set_params(params[self.b.n_params:], as_dict=False)
 
 class PDEFunc(eqx.Module):
-    # init_nn: MLPWithParams
+    init_nn: MLPWithParams
     grad_nn: MLPWithParams
     d: int
     n_params: int
     L: float
+    seed: int
+
+    # TODO: check that the norm of the adjoint remains constant
+    # TODO: try out a system where we add Bx + f0 to the solution, where B = anti-symmetric, learnable, f0 learnable const
 
     def __init__(self, d: int, L: float, width_size: int, depth: int, seed=0, **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.d = d
         self.L = L
+        self.seed = seed
 
         key = jrandom.PRNGKey(seed)
         k1, k2 = jrandom.split(key, 2)
-        in_size = d + 1
-        out_size = d + 1
-        # self.init_nn = MLPWithParams(in_size+1, out_size+1, width_size, depth, key=k1) # predicts initial conditions
-        grad_out = int((d + 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d, d)
+        in_size = d
+        self.init_nn = MLPWithParams(in_size, out_size=in_size, width_size=width_size, depth=depth, key=k1)        
+        # grad_out = int((d + 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d+1, d+1)
+        grad_out = d ** 2
         self.grad_nn = MLPWithParams(in_size, grad_out, width_size, depth, key=k2) # predicts gradient of f
 
-        # self.n_params = self.init_nn.n_params + self.grad_nn.n_params
-        self.n_params = self.grad_nn.n_params
+        self.n_params = self.init_nn.n_params + self.grad_nn.n_params
 
     def __call__(self, ts, x, args):
         # integrate
-        z = jnp.concatenate([x, jnp.array([self.L])])
+        # z = jnp.concatenate([x, jnp.array([self.L])])
+        z = x
         y = jax.vmap(self.integrand, in_axes=(None, 0))(z, jnp.linspace(0, 1, 101)) # A(sx)x
-        integral = jnp.trapz(y, dx=.01, axis=0)
+        integral = jnp.trapz(y, dx=1e-2, axis=0)
 
-        assert integral.shape == (self.d+1, ), f'shape of integral is {integral.shape}'
+        assert integral.shape == (self.d, ), f'shape of integral is {integral.shape}'
 
-        return integral[:self.d] # + self.integrand(z, 0)[:self.d]
+        return integral + self.pred_init(x)
 
     def integrand(self, x, s):
-        d = self.d + 1
+        d = self.d
         out = self.grad_nn(s*x) # \nabla f(s*x)
         out = jnp.concatenate([out, jnp.zeros(d*d - out.shape[0])]) # make conformable to (d, d)-matrix
         out = jnp.reshape(out, (d, d))
         out = out - jnp.transpose(out)
         return out @ x
 
+    def pred_init(self, x):
+        # x is only used for shape. This prediction cannot depend on x!
+        return self.init_nn(jnp.zeros(x.shape)).reshape(x.shape)
+
     def get_params(self, as_dict=False):
         if as_dict:
             raise NotImplementedError
-        # return jnp.concatenate([self.init_nn.get_params(as_dict=as_dict), self.grad_nn.get_params(as_dict=as_dict)])
-        return self.grad_nn.get_params(as_dict=as_dict)
+        return jnp.concatenate([self.init_nn.get_params(as_dict=as_dict), self.grad_nn.get_params(as_dict=as_dict)])
 
     def set_params(self, params, as_dict=False):
         if as_dict:
             raise NotImplementedError 
-        divide = self.init_nn.n_params
-        # self.init_nn.set_params(params[:divide], as_dict=as_dict)
-        self.grad_nn.set_params(params[divide:], as_dict=as_dict)
+        n_init = self.init_nn.n_params
+        self.init_nn.set_params(params[:n_init], as_dict=as_dict)
+        self.grad_nn.set_params(params[n_init:], as_dict=as_dict)
