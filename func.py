@@ -105,8 +105,10 @@ class PDEFunc(eqx.Module):
         # integrate
         # z = jnp.concatenate([x, jnp.array([self.L])])
         z = x
-        y = jax.vmap(self.integrand, in_axes=(None, 0))(z, jnp.linspace(0, 1, 101)) # A(sx)x
-        integral = jnp.trapz(y, dx=1e-2, axis=0)
+        s = jnp.linspace(0, 1, 101)
+        y = jax.vmap(self.integrand, in_axes=(None, 0))(z, s) # A(sx)x
+        integral = jnp.trapz(y, x=s, dx=1e-2, axis=0) # TODO: redo this
+        # integral = self.integrand(z, 1)
 
         assert integral.shape == (self.d, ), f'shape of integral is {integral.shape}'
 
@@ -123,6 +125,37 @@ class PDEFunc(eqx.Module):
     def pred_init(self, x):
         # x is only used for shape. This prediction cannot depend on x!
         return self.init_nn(jnp.zeros(x.shape)).reshape(x.shape)
+
+    def compute_adjoint(self, x, ts, end_state):
+        saveat = diffrax.SaveAt(ts=ts[::-1]) # diffrax doesn't work otherwise
+        y0 = jnp.concatenate([end_state, x.reshape((-1, ))])
+        solution = diffrax.diffeqsolve(
+            diffrax.ODETerm(self.term),
+            diffrax.Tsit5(),
+            t0=ts[-1],
+            t1=ts[0],
+            dt0=-(ts[1]-ts[0]),
+            y0=end_state,
+            stepsize_controller=diffrax.PIDController(),
+            saveat=saveat,
+        )
+        return solution
+
+    def term(self, t, state, args):
+        n = self.d
+        adjoint = state[1:n+1]
+        x = state[n+1:].reshape((-1, n))
+        N = x.shape[0]
+        idx = int(t * N / 10)
+        x = x[idx, :]
+
+        adjoint_change = adjoint @ self.grad_nn(x).reshape((n, n))
+
+        return jnp.concatenate([
+            adjoint_change,
+            jnp.zeros((N, ))
+        ])
+
 
     def get_params(self, as_dict=False):
         if as_dict:

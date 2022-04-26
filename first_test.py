@@ -25,7 +25,7 @@ from jax.config import config
 
 # config.update('jax_disable_jit', True)
 
-TRACK_STATS = True 
+TRACK_STATS = False 
 WHICH_FUNC = 'PDEFunc'
 DO_BACKWARD = True
 
@@ -114,20 +114,27 @@ def main(
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
-        loss, grads = grad_loss(model, ti, yi) # TODO: this is extremely slow, try implementing a backward pass instead
+        loss, grads = grad_loss(model, ti, yi)
         updates, opt_state = optim.update(grads, opt_state)
 
         if DO_BACKWARD: # TODO: makes more sense to not compute grads in grad_loss in this case; skip that computation in that case
             y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) 
-            dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[0, -1, :] # end state of the adjoint
-            end_state_loss = jnp.zeros((model.n_params, ))
-            # TODO: was y_pred[0, 0, :]
-            joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, -1, :]], axis=-1)
-            backward_pass = model.backward(ti, joint_end_state)
+            dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[:, -1, :] # end state of the adjoint
+            end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
+            # joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
+            joint_end_state = jnp.concatenate([dLdT, y_pred[:, -1, :]], axis=-1)
+            backward_pass = jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state)
+            # dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[0, -1, :] # end state of the adjoint
+            # end_state_loss = jnp.zeros((model.n_params, ))
+            # joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, -1, :]], axis=-1)
+            # backward_pass = model.backward(ti, joint_end_state)
 
-            n_adj = len(dLdT)
-            adjoint = backward_pass.ys[:, :n_adj]
+            n_adj = dLdT.shape[-1]
+            adjoint = backward_pass.ys[:, :, :n_adj]
+            # n_adj = 2
+            # adjoint = backward_pass.ys[:, :n_adj]
             adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
+            adjoint_errors = jnp.max(adjoint_norm, axis=-1) / jnp.min(adjoint_norm, axis=-1)
             if TRACK_STATS:
                 grad_tracker.update({'loss_change': backward_pass.ys})
             
@@ -171,7 +178,7 @@ ts, ys, model, grad_tracker = main(
     steps_strategy=(200, 200),
     print_every=100,
     batch_size=50,
-    length_strategy=(.1, 1),
+    length_strategy=(1, 1),
     lr_strategy=(3e-3, 1e-3),
     plot=True, 
     dataset_size=100,
@@ -180,21 +187,18 @@ ts, ys, model, grad_tracker = main(
 if TRACK_STATS:
     with open('outputs/num_steps.pkl', 'wb') as handle:
         to_save = model.get_stats()['num_steps']
-        pickle.dump(to_save.val, handle)
+        pickle.dump([item.val for item in to_save], handle)
 
     with open('outputs/state_norm.pkl', 'wb') as handle:
         to_save = model.get_stats()['state_norm']
-        pickle.dump(to_save.val, handle)
+        pickle.dump([item.val for item in to_save], handle)
 
     with open('outputs/grad_init.pkl', 'wb') as handle:
         to_save = model.get_stats()['grad_init']
-        pickle.dump(to_save.val, handle)
-
-    # with open('outputs/stats.pkl', 'wb') as handle:
-    #     pickle.dump(model.get_stats(), handle)
+        pickle.dump([item.val for item in to_save], handle)
 
     with open('outputs/grad_info.pkl', 'wb') as handle:
         to_save = grad_tracker.attributes['loss_change']
-        pickle.dump(to_save.val, handle)
+        pickle.dump([item.val for item in to_save], handle)
 
 

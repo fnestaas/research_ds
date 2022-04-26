@@ -98,11 +98,12 @@ class NeuralODE(eqx.Module):
         dfdz = jax.jacrev(lambda z: self.func(t, z, args))
         dfdth = jax.jacrev(lambda th: self.pdefunc_with_params(th)(t, x, args))
 
-        t1 = adjoint @ dfdz(x)
-        t2 = - adjoint @ dfdth(self.func.get_params(as_dict=False))
-        t3 = - self.func(t, x, args)
+        t1 = - adjoint @ dfdz(x)
+        # t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
+        t3 = self.func(t, x, args)
 
-        return jnp.concatenate([t1, t2, t3])
+        # return jnp.concatenate([t1, t2, t3])
+        return jnp.concatenate([t1, t3])
 
     def backward(self, ts, joint_end_state):
         """

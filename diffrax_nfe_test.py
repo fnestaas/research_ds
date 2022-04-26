@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import joblib 
 import matplotlib.pyplot as plt 
 
-stats = joblib.load('outputs/grad_info.pkl')#joblib.load('outputs/stats.pkl')
+stats = joblib.load('outputs/state_norm.pkl')#joblib.load('outputs/stats.pkl')
 key = 'grad_info' # 'num_steps' 
 # N = len(stats[key])
 N = len(stats)
