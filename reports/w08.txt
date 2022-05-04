@@ -1,0 +1,32 @@
+Notes week 8
+
+What I did this week:
+Checked computation from last week, discussed it with friends, found (conceptual) error
+Proved two results (one is a stronger version of the other)
+Implemented regularization based on proof. Very slow; possible approach is batching?
+Made it possible to visualize adjoint (there were bugs earlier)
+Visualized some adjoints, more on this next week
+Worked a bit on integration vs. no integration and adjoint, found heuristic reasoning why integration works better
+
+Questions:
+In the proof I assume differentiability. What about ReLU (which is piecewise linear)?
+Publication?
+Should implement more/make more theory, or should I focus on finishing up now?
+Good ways to illustrate code performance? - Look at other papers (and NFE, Norm of adjoint, state norm, acc.)
+
+Other ideas I had this week (probably no time to look into, maybe next project?):
+Proof does not guarantee that e.g. AntiSymmetricRNN has stable adjoint. Are there adversarial attacks to destabilize adjoint?
+E.g. if we take a AD a^T, can choose entries of D s.t. Da^T = (Aa^T)^T to make adjoint behavior as bad as possible. Can we use this as an attack?
+
+Report:
+Collect ideas, put them in relation to each other
+Illustrate how the methods I have implemented (PDEFunc, regularization) affect the adjoint, compare with other methods (and Residual RNNs?)
+
+Next week:
+Think about theoretical results using ReLU (not diffable)
+Work on collecting results for report (NFE, adjoint behavior, benchmarks)
+Make writeup less chaotic
+Clean up code (e.g. implement abstract class ModuleWithParams ...)
+Run more tests for report (make a systematic way to run tests)
+
+
