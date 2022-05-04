@@ -1,0 +1,34 @@
+Notes week 7
+
+Developed NeuralPDE - an architecture where we can specify dfdz and compute the dynamics from this 
+using a 2D PDE. 
+
+Implemented NeuralPDE for dynamics where the adjoint norm is constant. Empirical results show that
+the adjoint is nearly constant but not quite.
+
+INCORRECT:
+Showed that if norm(dfdz) is constant, then f(z, t) = A(z, t) z for some anti-symmetric A. This
+makes it unneccesary to use NeuralPDE for this application (I realized after implementing).
+
+Realized that initialization is important in the toy problem. NeuralPDE had similar results to 
+what GatedODE had when I did not use any initialization. This makes sense intuitively, since 
+without initialization, especially with GatedODE, the 'force field' for each x is the same.
+
+UNNECCESARY since this was a theory error and not a numerical one:
+Watched Lars Ruthotto lecture on NNs inspired by differential equations. Some new insights to how
+to solve for gradients in a stable way, but need to read more
+
+Set up Euler properly
+
+Questions:
+what makes sense to study this week? Did not work on e.g. Gradient Alignment
+How much should I put into the report?
+Are there good benchmarks to test the architectures I have now?
+
+Next week:
+More theory, look for error in computation
+Try to understand why the integral implementation of PDEFunc works better than when not integrating
+
+(maybe)
+solve PDE for constant norm(d^2L / dtdz)
+Work more on relating existing architectures to our framework
