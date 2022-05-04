@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import equinox as eqx
 from WeightDynamics import * 
 from nn_with_params import *
@@ -22,10 +23,98 @@ class DynX(eqx.Module):
     
     def set_params(self, params, as_dict=False):
         pass
+    def func_with_params(self, params):
+        """
+        Generate a Func with parameters params;
+        useful e.g. when computing the derivative of such a Func wrt its parameters
+        """
+        key = jrandom.PRNGKey(0)
+        b = GatedODE(self.d, width=self.func.b.width, depth=self.func.b.depth, key=key)
+        f = DynX()
+        func = Func(b, f)
+        func.set_params(params, as_dict=False)
+        return func
 
+    def full_term_func(self, t, joint_state, args):
+        """
+        Callable term to perform a backward pass to compute the adjoint, parameter gradients
+        as a function of time, and the solution itself (needed to compute the others)
+        
+        returns [a d func / d z, -a d func / d theta, -func] 
+        """
+        n = self.d * (self.d + 1)
+        adjoint = joint_state[:n]
+        x = joint_state[-n:]
 
+        dfdz = jax.jacrev(lambda z: self.func(t, z, args))
+        dfdth = jax.jacrev(lambda th: self.func_with_params(th)(t, x, args))
+
+        t1 = - adjoint @ dfdz(x)
+        t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
+        t3 = self.func(t, x, args)
+
+        return jnp.concatenate([t1, t2, t3]) # don't negate; diffrax does that
+
+    def pdefunc_with_params(self, params):
+        func = PDEFunc(self.func.d, self.func.L, self.func.grad_nn.width_size, self.func.grad_nn.depth)
+        func.set_params(params, as_dict=False)
+        return func
+
+    def full_term_pdefunc(self, t, joint_state, args):
+        n = self.func.d
+        adjoint = joint_state[:n]
+        x = joint_state[-n:]
+
+        dfdz = jax.jacrev(lambda z: self.func(t, z, args))
+        dfdth = jax.jacrev(lambda th: self.pdefunc_with_params(th)(t, x, args))
+
+        t1 = - adjoint @ dfdz(x)
+        # t1 = - adjoint @ self.func.pred_skew(x, 1) # This is skew symmetric and then the adjoint norm 
+        # is constant;
+        # which is further evidence that the variation of the adjoint arises from numerical errors in 
+        # differentiation/integration
+    
+        # t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
+        t3 = self.func(t, x, args)
+
+        # return jnp.concatenate([t1, t2, t3])
+        return jnp.concatenate([t1, t3])
+
+    def backward(self, ts, joint_end_state):
+        """
+        Perform a backward pass through the NeuralODE
+        joint_end_state is the final state, it contains the values of the
+        adjoint, loss gradient wrt the parameters and state at the end time
+        """
+        if isinstance(self.func, Func):
+            term = self.full_term_func
+        elif isinstance(self.func, PDEFunc):
+            term = self.full_term_pdefunc
+        saveat = diffrax.SaveAt(ts=ts[::-1]) # diffrax doesn't work otherwise
+        solution = diffrax.diffeqsolve(
+            diffrax.ODETerm(term),
+            diffrax.Tsit5(),
+            t0=ts[-1],
+            t1=ts[0],
+            dt0=-(ts[1]-ts[0]),
+            y0=joint_end_state,
+            stepsize_controller=diffrax.PIDController(),
+            saveat=saveat,
+        )
+        return solution
 
 class Func(eqx.Module):
+    d: int 
+
+    @abstractmethod
+    def get_params(self, as_dict=False):
+        pass
+
+    @abstractmethod
+    def set_params(self, params, as_dict=False):
+        pass
+
+class ODE2ODEFunc(Func):
     """
     Complete dynamics of the system; keeps track of how the weights and state evolve.
     """
@@ -35,7 +124,7 @@ class Func(eqx.Module):
     n_params: int
 
     def __init__(self, b, f, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(b.d, **kwargs)
         # dynamics by which W_t should evolve
         self.b = b
         self.d = b.d # dimension of x_t
@@ -73,7 +162,7 @@ class Func(eqx.Module):
                 print('Setting params of f')
                 self.f.set_params(params[self.b.n_params:], as_dict=False)
 
-class PDEFunc(eqx.Module):
+class PDEFunc(Func):
     init_nn: MLPWithParams
     grad_nn: MLPWithParams
     d: int
@@ -85,7 +174,7 @@ class PDEFunc(eqx.Module):
     # TODO: try out a system where we add Bx + f0 to the solution, where B = anti-symmetric, learnable, f0 learnable const
 
     def __init__(self, d: int, L: float, width_size: int, depth: int, seed=0, **kwargs) -> None:
-        super().__init__(**kwargs)
+        super().__init__(d, **kwargs)
 
         self.d = d
         self.L = L
@@ -107,55 +196,27 @@ class PDEFunc(eqx.Module):
         z = x
         s = jnp.linspace(0, 1, 101)
         y = jax.vmap(self.integrand, in_axes=(None, 0))(z, s) # A(sx)x
-        integral = jnp.trapz(y, x=s, dx=1e-2, axis=0) # TODO: redo this
-        # integral = self.integrand(z, 1)
+        integral = jnp.trapz(y, x=s, dx=1e-2, axis=0) 
+        # integral = self.integrand(z, 1) # TODO: for some reason this does not work well with adjoint
 
         assert integral.shape == (self.d, ), f'shape of integral is {integral.shape}'
 
-        return integral + self.pred_init(x)
+        return integral + self.pred_init()
 
     def integrand(self, x, s):
+        out = self.pred_skew(x, s)
+        return out @ x
+
+    def pred_skew(self, x, s):
         d = self.d
         out = self.grad_nn(s*x) # \nabla f(s*x)
         out = jnp.concatenate([out, jnp.zeros(d*d - out.shape[0])]) # make conformable to (d, d)-matrix
         out = jnp.reshape(out, (d, d))
         out = out - jnp.transpose(out)
-        return out @ x
+        return out
 
-    def pred_init(self, x):
-        # x is only used for shape. This prediction cannot depend on x!
-        return self.init_nn(jnp.zeros(x.shape)).reshape(x.shape)
-
-    def compute_adjoint(self, x, ts, end_state):
-        saveat = diffrax.SaveAt(ts=ts[::-1]) # diffrax doesn't work otherwise
-        y0 = jnp.concatenate([end_state, x.reshape((-1, ))])
-        solution = diffrax.diffeqsolve(
-            diffrax.ODETerm(self.term),
-            diffrax.Tsit5(),
-            t0=ts[-1],
-            t1=ts[0],
-            dt0=-(ts[1]-ts[0]),
-            y0=end_state,
-            stepsize_controller=diffrax.PIDController(),
-            saveat=saveat,
-        )
-        return solution
-
-    def term(self, t, state, args):
-        n = self.d
-        adjoint = state[1:n+1]
-        x = state[n+1:].reshape((-1, n))
-        N = x.shape[0]
-        idx = int(t * N / 10)
-        x = x[idx, :]
-
-        adjoint_change = adjoint @ self.grad_nn(x).reshape((n, n))
-
-        return jnp.concatenate([
-            adjoint_change,
-            jnp.zeros((N, ))
-        ])
-
+    def pred_init(self):
+        return self.init_nn(jnp.zeros((self.d, ))).reshape((self.d, ))
 
     def get_params(self, as_dict=False):
         if as_dict:
@@ -168,3 +229,4 @@ class PDEFunc(eqx.Module):
         n_init = self.init_nn.n_params
         self.init_nn.set_params(params[:n_init], as_dict=as_dict)
         self.grad_nn.set_params(params[n_init:], as_dict=as_dict)
+

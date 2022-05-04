@@ -25,9 +25,11 @@ from jax.config import config
 
 # config.update('jax_disable_jit', True)
 
-TRACK_STATS = False 
-WHICH_FUNC = 'PDEFunc'
-DO_BACKWARD = True
+TRACK_STATS = True 
+WHICH_FUNC = 'ODE2ODEFunc'
+DO_BACKWARD = True 
+REGULARIZE = False
+PLOT = False
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -88,10 +90,10 @@ def main(
     ts, ys = get_data(dataset_size, key=data_key)
     _, length_size, data_size = ys.shape
 
-    if WHICH_FUNC == 'Func':
+    if WHICH_FUNC == 'ODE2ODEFunc':
         b = GatedODE(data_size, width=4, depth=2, key=key)
         f = DynX()
-        func = Func(b, f)
+        func = ODE2ODEFunc(b, f)
         cat_dim = 2
     
     elif WHICH_FUNC == 'PDEFunc':
@@ -101,8 +103,9 @@ def main(
         raise NotImplementedError
     
     model = NeuralODE(func=func)
+    sym_loss = SymmetricLoss(func)
 
-    grad_tracker = StatTracker(['loss_change'])
+    grad_tracker = StatTracker(['adjoint_norm'])
 
     # Training loop where we train on only length_strategy[i] in the ith iteration
     # This avoids getting stuck in a local minimum
@@ -110,35 +113,37 @@ def main(
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi):
         y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], TRACK_STATS)
-        return _loss_func(yi, y_pred) # in this example, only the first two dimensions are the output
+        if REGULARIZE:
+            return _loss_func(yi, y_pred) + jnp.mean(sym_loss(ti, y_pred)) # in this example, only the first two dimensions are the output
+        else:
+            return _loss_func(yi, y_pred)
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
         loss, grads = grad_loss(model, ti, yi)
-        updates, opt_state = optim.update(grads, opt_state)
-
-        if DO_BACKWARD: # TODO: makes more sense to not compute grads in grad_loss in this case; skip that computation in that case
+        updates, opt_state = optim.update(grads, opt_state) 
+        
+        if DO_BACKWARD: 
             y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) 
             dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[:, -1, :] # end state of the adjoint
-            end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
+            # end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
             # joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
             joint_end_state = jnp.concatenate([dLdT, y_pred[:, -1, :]], axis=-1)
             backward_pass = jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state)
-            # dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[0, -1, :] # end state of the adjoint
-            # end_state_loss = jnp.zeros((model.n_params, ))
-            # joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[0, -1, :]], axis=-1)
-            # backward_pass = model.backward(ti, joint_end_state)
 
             n_adj = dLdT.shape[-1]
             adjoint = backward_pass.ys[:, :, :n_adj]
-            # n_adj = 2
-            # adjoint = backward_pass.ys[:, :n_adj]
+
             adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
             adjoint_errors = jnp.max(adjoint_norm, axis=-1) / jnp.min(adjoint_norm, axis=-1)
+            if isinstance(model.func, PDEFunc):
+                A = jax.jacrev(lambda z: model.func(1, z, []))(jnp.ones((2, ))) 
+                anti_sym_error = jnp.sum(jnp.abs(A + jnp.transpose(A))) # can be large!!
+
+
             if TRACK_STATS:
-                grad_tracker.update({'loss_change': backward_pass.ys})
-            
-        
+                grad_tracker.update({'adjoint_norm': adjoint_norm})
+
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
 
@@ -178,27 +183,37 @@ ts, ys, model, grad_tracker = main(
     steps_strategy=(200, 200),
     print_every=100,
     batch_size=50,
-    length_strategy=(1, 1),
+    length_strategy=(.1, 1),
     lr_strategy=(3e-3, 1e-3),
-    plot=True, 
+    plot=PLOT, 
     dataset_size=100,
 )
+
+def save_jnp(to_save, handle):
+    try:
+        pickle.dump([item.val._value for item in to_save], handle)
+    except:
+        try:
+            pickle.dump([item._value for item in to_save], handle)
+        except:
+            pickle.dump([item.val.aval.val._value for item in to_save], handle)
 
 if TRACK_STATS:
     with open('outputs/num_steps.pkl', 'wb') as handle:
         to_save = model.get_stats()['num_steps']
-        pickle.dump([item.val for item in to_save], handle)
+        save_jnp(to_save, handle)
+        
 
     with open('outputs/state_norm.pkl', 'wb') as handle:
         to_save = model.get_stats()['state_norm']
-        pickle.dump([item.val for item in to_save], handle)
+        save_jnp(to_save, handle)
 
     with open('outputs/grad_init.pkl', 'wb') as handle:
         to_save = model.get_stats()['grad_init']
-        pickle.dump([item.val for item in to_save], handle)
+        save_jnp(to_save, handle)
 
-    with open('outputs/grad_info.pkl', 'wb') as handle:
-        to_save = grad_tracker.attributes['loss_change']
-        pickle.dump([item.val for item in to_save], handle)
+    with open('outputs/adjoint_norm.pkl', 'wb') as handle:
+        to_save = grad_tracker.attributes['adjoint_norm']
+        save_jnp(to_save, handle)
 
 

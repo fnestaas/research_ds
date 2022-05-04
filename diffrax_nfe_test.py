@@ -2,13 +2,12 @@ import jax.numpy as jnp
 import joblib 
 import matplotlib.pyplot as plt 
 
-stats = joblib.load('outputs/state_norm.pkl')#joblib.load('outputs/stats.pkl')
-key = 'grad_info' # 'num_steps' 
-# N = len(stats[key])
+key = 'adjoint_norm' # 'num_steps'
+stats = joblib.load(f'outputs/{key}.pkl')#joblib.load('outputs/stats.pkl') 
 N = len(stats)
+# N = len(stats)
 
-# stat = [jnp.mean(jnp.abs(s)) for s in stats[key]]
-stat = [jnp.var(s) for s in stats]
+stat = [jnp.mean(jnp.var(s, axis=-1)) for s in stats]
 
 #stat[:200] = [s / jnp.sqrt(10) for s in stat[:200]]
 #stat[200:] = [s / jnp.sqrt(100) for s in stat[200:]]
