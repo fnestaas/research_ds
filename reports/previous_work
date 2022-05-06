@@ -1,0 +1,4 @@
+https://arxiv.org/pdf/1705.03341.pdf 
+Regularizes the dynamics of the anti-sym matrix K
+In our context, their regularization is equivalent to penalizing the integral of the 
+square of the time-derivative of the matrices.

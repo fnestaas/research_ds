@@ -8,8 +8,8 @@ import equinox as eqx
 import matplotlib.pyplot as plt
 import optax
 import copy
-from WeightDynamics import * 
-from NeuralODE import *
+from models.WeightDynamics import * 
+from models.NeuralODE import *
 
 
 seed = 0

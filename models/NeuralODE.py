@@ -3,8 +3,8 @@ import jax.numpy as jnp
 import jax
 import diffrax
 import equinox as eqx
-from WeightDynamics import * 
-from func import *
+from models.WeightDynamics import * 
+from models.Func import *
 
 class StatTracker():
     """

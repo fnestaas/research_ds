@@ -1,7 +1,7 @@
 from abc import abstractmethod
 import equinox as eqx
-from WeightDynamics import * 
-from nn_with_params import *
+from models.WeightDynamics import * 
+from models.nn_with_params import *
 import diffrax
 
 
@@ -167,17 +167,15 @@ class PDEFunc(Func):
     grad_nn: MLPWithParams
     d: int
     n_params: int
-    L: float
     seed: int
 
     # TODO: check that the norm of the adjoint remains constant
     # TODO: try out a system where we add Bx + f0 to the solution, where B = anti-symmetric, learnable, f0 learnable const
 
-    def __init__(self, d: int, L: float, width_size: int, depth: int, seed=0, **kwargs) -> None:
+    def __init__(self, d: int, width_size: int, depth: int, seed=0, **kwargs) -> None:
         super().__init__(d, **kwargs)
 
         self.d = d
-        self.L = L
         self.seed = seed
 
         key = jrandom.PRNGKey(seed)

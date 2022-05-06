@@ -5,7 +5,7 @@ from numpy import save
 from loss_change import make_grads_callable, _fill_none
 from copy import deepcopy
 import diffrax
-from NeuralODE import Func
+from models.NeuralODE import Func
 
 class AdjointSolver():
     func: Func 
@@ -19,7 +19,7 @@ class AdjointSolver():
     def solve(self, ts, loss_func, y, y_pred):
         to_diff = lambda x: loss_func(x, y)
         y0 = jax.grad(to_diff)(y_pred)
-        arg0 = diffrax.ODETerm(self.func)
+        arg0 = diffrax.ODETerm(self.func) # TODO: this is a bug; should be derivative wrt state!
         arg1 = diffrax.Tsit5()
         t0=ts[-1]
         t1=ts[0] # solve backwards in time

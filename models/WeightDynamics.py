@@ -2,7 +2,7 @@ import equinox as eqx
 import jax.numpy as jnp 
 import jax.random as jrandom
 import jax.nn as jnn
-from nn_with_params import *
+from models.nn_with_params import *
 
 class WeightDynamics(eqx.Module):
     d: int 

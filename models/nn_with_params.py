@@ -33,7 +33,6 @@ class LinearWithParams(Linear):
         object.__setattr__(self, 'bias', bias)
         object.__setattr__(self, 'weight', weight)
 
-
 class MLPWithParams(MLP):
     layers: List[LinearWithParams]
     n_params: int
@@ -84,3 +83,4 @@ class MLPWithParams(MLP):
                 p = params[counter:counter+layer_size]
                 l.set_params(p, as_dict=False)
                 counter = counter + layer_size
+

@@ -17,9 +17,10 @@ import pickle
 
 from torch import isin
 
-from WeightDynamics import * 
-from NeuralODE import *
-from func import *
+# from import_models import *
+from models.NeuralODE import *
+from models.WeightDynamics import *
+from models.Func import *
 
 from jax.config import config
 
@@ -97,7 +98,7 @@ def main(
         cat_dim = 2
     
     elif WHICH_FUNC == 'PDEFunc':
-        func = PDEFunc(d=2, width_size=4, depth=2, L=0)
+        func = PDEFunc(d=2, width_size=4, depth=2)
         cat_dim = 0
     else:
         raise NotImplementedError
@@ -192,10 +193,10 @@ ts, ys, model, grad_tracker = main(
 def save_jnp(to_save, handle):
     try:
         pickle.dump([item.val._value for item in to_save], handle)
-    except:
+    except AttributeError:
         try:
             pickle.dump([item._value for item in to_save], handle)
-        except:
+        except AttributeError:
             pickle.dump([item.val.aval.val._value for item in to_save], handle)
 
 if TRACK_STATS:
