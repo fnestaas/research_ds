@@ -1,6 +1,8 @@
 # This file is taken from
 # https://jax.readthedocs.io/en/latest/notebooks/Neural_Network_and_Data_Loading.html
 
+# TODO: other datasets here: http://proceedings.mlr.press/v80/helfrich18a/helfrich18a.pdf
+
 import numpy as np
 from torch.utils import data
 from torchvision.datasets import MNIST
@@ -67,10 +69,9 @@ test_labels = one_hot(np.array(mnist_dataset_test.test_labels), n_targets)
 
 def main(
     lr_strategy=(3e-3, 3e-3),
-    steps_strategy=(500, 500),
-    length_strategy=(0.1, 1),
+    steps_strategy=(200, 200),
+    length_strategy=(1, 1),
     seed=5678,
-    plot=True,
     print_every=100,
 ):
     key = jrandom.PRNGKey(seed)
@@ -79,7 +80,7 @@ def main(
     # ts, ys = get_data(dataset_size, key=data_key) 
     # _, length_size, data_size = ys.shape
 
-    func = node.PDEFunc(d=100, width_size=100, depth=2)
+    func = node.PDEFunc(d=50, width_size=50, depth=2, N=10) # number of steps taken to solve is very important. Use more advanced method?
     model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key)
 
     # Training loop where we train on only length_strategy[i] in the ith iteration
@@ -88,7 +89,7 @@ def main(
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi, labels):
         y_pred = vmap(model, in_axes=(None, 0, None))(ti, yi, TRACK_STATS)
-        return _loss_func(labels, y_pred)
+        return _loss_func(one_hot(labels, 10), y_pred)
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state, labels):
@@ -99,7 +100,7 @@ def main(
         return loss, model, opt_state
 
     def _celoss(y, y_pred):
-        return -jnp.sum(y*y_pred)
+        return -jnp.sum(y*jnp.log(y_pred + .001))
 
     def _loss_func(y, y_pred):
         # return jnp.mean((y[:, :, :2] - y_pred[:, :, node.NeuralODE(func):2]) ** 2)

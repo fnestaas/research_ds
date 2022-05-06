@@ -168,11 +168,12 @@ class PDEFunc(Func):
     d: int
     n_params: int
     seed: int
+    N: int # number of integration steps
 
     # TODO: check that the norm of the adjoint remains constant
     # TODO: try out a system where we add Bx + f0 to the solution, where B = anti-symmetric, learnable, f0 learnable const
 
-    def __init__(self, d: int, width_size: int, depth: int, seed=0, **kwargs) -> None:
+    def __init__(self, d: int, width_size: int, depth: int, seed=0, N=100, **kwargs) -> None:
         super().__init__(d, **kwargs)
 
         self.d = d
@@ -182,19 +183,20 @@ class PDEFunc(Func):
         k1, k2 = jrandom.split(key, 2)
         in_size = d
         self.init_nn = MLPWithParams(in_size, out_size=in_size, width_size=width_size, depth=depth, key=k1)        
-        # grad_out = int((d + 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d+1, d+1)
-        grad_out = d ** 2
+        grad_out = int((d - 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d, d)
+        # grad_out = d ** 2
         self.grad_nn = MLPWithParams(in_size, grad_out, width_size, depth, key=k2) # predicts gradient of f
 
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
+        self.N = N
 
     def __call__(self, ts, x, args):
         # integrate
         # z = jnp.concatenate([x, jnp.array([self.L])])
         z = x
-        s = jnp.linspace(0, 1, 101)
+        s = jnp.linspace(0, 1, self.N+1)
         y = jax.vmap(self.integrand, in_axes=(None, 0))(z, s) # A(sx)x
-        integral = jnp.trapz(y, x=s, dx=1e-2, axis=0) 
+        integral = jnp.trapz(y, x=s, dx=1/self.N, axis=0) 
         # integral = self.integrand(z, 1) # TODO: for some reason this does not work well with adjoint
 
         assert integral.shape == (self.d, ), f'shape of integral is {integral.shape}'

@@ -23,5 +23,5 @@ class NeuralODEClassifier(eqx.Module):
     def __call__(self, ts, x, update=False):
         x = self.input_layer(x)
         x = self.node(ts, x, update=update)
-        x = self.output_layer(x)
+        x = self.output_layer(x[-1, :]) # use x at final time
         return self.activation(x)

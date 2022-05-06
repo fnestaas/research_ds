@@ -131,7 +131,7 @@ class NeuralODE(eqx.Module):
         self.n_params = self.func.n_params
         self.d = self.func.d
         self.backwardpasser = BackwardPasser(self.func, **kwargs)
-        # self.last_pred = jnp.zeros((1, ))
+        
 
     def solve(self, ts, y0):
         """
