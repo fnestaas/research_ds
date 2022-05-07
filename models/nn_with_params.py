@@ -25,7 +25,8 @@ class LinearWithParams(Linear):
             bias = params['bias']
             weight = params['weight']
         else:
-            assert len(params) == self.n_params
+            if self.n_params is not None:
+                assert len(params) == self.n_params
             bias = params[:self.out_features]
             weight = params[self.out_features:].reshape(self.weight.shape)
         
@@ -83,4 +84,3 @@ class MLPWithParams(MLP):
                 p = params[counter:counter+layer_size]
                 l.set_params(p, as_dict=False)
                 counter = counter + layer_size
-

@@ -93,7 +93,8 @@ class GatedODE(WeightDynamics):
             for f, v in zip(self.f, params.values()):
                 f.set_params(v, as_dict=True)
         else:
-            assert len(params) == self.n_params
+            if self.n_params is not None:
+                assert len(params) == self.n_params
             counter = 0
             for f in self.f:
                 p = params[counter:counter+f.n_params]

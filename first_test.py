@@ -27,10 +27,22 @@ from jax.config import config
 # config.update('jax_disable_jit', True)
 
 TRACK_STATS = True 
-WHICH_FUNC = 'ODE2ODEFunc'
+WHICH_FUNC = 'PDEFunc' # 'PDEFunc' # 'ODE2ODEFunc'
 DO_BACKWARD = True 
 REGULARIZE = False
-PLOT = False
+PLOT = True
+DEBUG_GRADS = False
+
+
+def make_np(arr_list):
+    try:
+        res = [item.val._value for item in arr_list]
+    except AttributeError:
+        try:
+            res = [item._value for item in arr_list]
+        except AttributeError:
+            res = [item.val.aval.val._value for item in arr_list]
+    return res
 
 def _get_data(ts, *, key):
     y0 = jrandom.uniform(key, (2,), minval=-0.6, maxval=1)
@@ -103,7 +115,7 @@ def main(
     else:
         raise NotImplementedError
     
-    model = NeuralODE(func=func)
+    model = NeuralODE(func=func, keep_grads=not DO_BACKWARD)
     sym_loss = SymmetricLoss(func)
 
     grad_tracker = StatTracker(['adjoint_norm'])
@@ -121,30 +133,60 @@ def main(
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
-        loss, grads = grad_loss(model, ti, yi)
-        updates, opt_state = optim.update(grads, opt_state) 
-        
+        if DEBUG_GRADS:
+            loss, grads = grad_loss(model, ti, yi)
+            updates, opt_state = optim.update(grads, opt_state)
         if DO_BACKWARD: 
-            y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False) 
+            # compute gradients "manually"
+            y_pred = jax.lax.stop_gradient(jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False))
+
             dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[:, -1, :] # end state of the adjoint
-            # end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
-            # joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
-            joint_end_state = jnp.concatenate([dLdT, y_pred[:, -1, :]], axis=-1)
-            backward_pass = jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state)
+            end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
+            joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
+            
+            backward_pass = jax.lax.stop_gradient(jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state))
 
             n_adj = dLdT.shape[-1]
             adjoint = backward_pass.ys[:, :, :n_adj]
 
             adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
             adjoint_errors = jnp.max(adjoint_norm, axis=-1) / jnp.min(adjoint_norm, axis=-1)
+            
+            computed_grads = -backward_pass.ys[:, :, n_adj:-n_adj]
+            
+            cp_grads = jnp.sum(jnp.trapz(computed_grads, axis=1, dx=ts[1]-ts[0]), axis=0)
+            if DEBUG_GRADS:
+                true_grads = grads.get_params()
+                scale = jnp.max(jnp.abs(true_grads))/ jnp.max(jnp.abs(cp_grads)) 
+                estimated_grad = scale * cp_grads
+                grad_error = jnp.max(jnp.abs(estimated_grad - true_grads))
+            else:
+                scale = 8 # TODO: Why exactly?
+                estimated_grad = scale * cp_grads
+
             if isinstance(model.func, PDEFunc):
                 A = jax.jacrev(lambda z: model.func(1, z, []))(jnp.ones((2, ))) 
                 anti_sym_error = jnp.sum(jnp.abs(A + jnp.transpose(A))) # can be large!!
 
-
+            if not DEBUG_GRADS:
+                # create a gradient to use optim
+                if isinstance(model.func, PDEFunc):
+                    fc = PDEFunc(model.func.d, model.func.init_nn.width_size, model.func.init_nn.depth)
+                else:
+                    b = GatedODE(model.func.b.d, model.func.b.width, depth=model.func.b.depth)
+                    f = DynX()
+                    fc = ODE2ODEFunc(b, f)
+                grads = NeuralODE(fc)
+                grads.set_params(estimated_grad)
+                grads = eqx.filter(grads, eqx.is_array)
+                updates, opt_state = optim.update(grads, opt_state) 
+            loss = _loss_func(yi, y_pred)
             if TRACK_STATS:
                 grad_tracker.update({'adjoint_norm': adjoint_norm})
 
+        elif not DEBUG_GRADS:
+            loss, grads = grad_loss(model, ti, yi)
+            updates, opt_state = optim.update(grads, opt_state) 
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
 
@@ -191,20 +233,18 @@ ts, ys, model, grad_tracker = main(
 )
 
 def save_jnp(to_save, handle):
-    try:
-        pickle.dump([item.val._value for item in to_save], handle)
-    except AttributeError:
-        try:
-            pickle.dump([item._value for item in to_save], handle)
-        except AttributeError:
-            pickle.dump([item.val.aval.val._value for item in to_save], handle)
+    pickle.dump(make_np(to_save), handle)
 
+# Save the model parameters
+with open('outputs/last_state.pkl', 'wb') as handle:
+    save_jnp(model.get_params(), handle)
+
+# Save stats
 if TRACK_STATS:
     with open('outputs/num_steps.pkl', 'wb') as handle:
         to_save = model.get_stats()['num_steps']
         save_jnp(to_save, handle)
         
-
     with open('outputs/state_norm.pkl', 'wb') as handle:
         to_save = model.get_stats()['state_norm']
         save_jnp(to_save, handle)

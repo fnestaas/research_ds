@@ -2,6 +2,7 @@
 # https://jax.readthedocs.io/en/latest/notebooks/Neural_Network_and_Data_Loading.html
 
 # TODO: other datasets here: http://proceedings.mlr.press/v80/helfrich18a/helfrich18a.pdf
+# https://github.com/ajithcodesit/lstm_copy_task/blob/master/LSTM_copy_task.py 
 
 import numpy as np
 from torch.utils import data

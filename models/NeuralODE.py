@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import jax
 import diffrax
 import equinox as eqx
+from numpy import diff
 from models.WeightDynamics import * 
 from models.Func import *
 
@@ -17,7 +18,6 @@ class StatTracker():
         for key, val in dct.items():
             self.attributes[key].append(val)
         
-
 class BackwardPasser(eqx.Module):
 
     func: Func
@@ -47,23 +47,23 @@ class BackwardPasser(eqx.Module):
         Callable term to perform a backward pass to compute the adjoint, parameter gradients
         as a function of time, and the solution itself (needed to compute the others)
         
-        returns [a d func / d z, -a d func / d theta, -func] 
+        returns [-a d func / d z, a d func / d theta, func] 
         """
         n = self.d * (self.d + 1)
         adjoint = joint_state[:n]
         x = joint_state[-n:]
 
-        dfdz = jax.jacrev(lambda z: self.func(t, z, args))
-        # dfdth = jax.jacrev(lambda th: self.func_with_params(th)(t, x, args))
+        dfdz = jax.jacfwd(lambda z: self.func(t, z, args))
+        dfdth = jax.jacfwd(lambda th: self.func_with_params(th)(t, x, args))
 
         t1 = - adjoint @ dfdz(x)
-        # t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
+        t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
         t3 = self.func(t, x, args)
 
-        return jnp.concatenate([t1, t3]) # don't negate; diffrax does that
+        return jnp.concatenate([t1, t2, t3]) # don't negate; diffrax does that
 
     def pdefunc_with_params(self, params):
-        func = PDEFunc(self.func.d, self.func.L, self.func.grad_nn.width_size, self.func.grad_nn.depth)
+        func = PDEFunc(self.func.d, self.func.grad_nn.width_size, self.func.grad_nn.depth)
         func.set_params(params, as_dict=False)
         return func
 
@@ -72,20 +72,14 @@ class BackwardPasser(eqx.Module):
         adjoint = joint_state[:n]
         x = joint_state[-n:]
 
-        dfdz = jax.jacrev(lambda z: self.func(t, z, args))
-        dfdth = jax.jacrev(lambda th: self.pdefunc_with_params(th)(t, x, args))
+        dfdz = jax.jacfwd(lambda z: self.func(t, z, args))
+        dfdth = jax.jacfwd(lambda th: self.pdefunc_with_params(th)(t, x, args))
 
         t1 = - adjoint @ dfdz(x)
-        # t1 = - adjoint @ self.func.pred_skew(x, 1) # This is skew symmetric and then the adjoint norm 
-        # is constant;
-        # which is further evidence that the variation of the adjoint arises from numerical errors in 
-        # differentiation/integration
-    
-        # t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
+        t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
         t3 = self.func(t, x, args)
 
-        # return jnp.concatenate([t1, t2, t3])
-        return jnp.concatenate([t1, t3])
+        return jnp.concatenate([t1, t2, t3])
 
     def backward(self, ts, joint_end_state):
         """
@@ -107,6 +101,7 @@ class BackwardPasser(eqx.Module):
             y0=joint_end_state,
             stepsize_controller=diffrax.PIDController(),
             saveat=saveat,
+            # adjoint=diffrax.BacksolveAdjoint(),
         )
         return solution
 
@@ -120,9 +115,9 @@ class NeuralODE(eqx.Module):
     n_params: int
     d: int
     backwardpasser: BackwardPasser
-    # last_pred: jnp.array # useful for tracking stats
+    keep_grads: Boolean
 
-    def __init__(self, func, to_track=['num_steps', 'state_norm', 'grad_init'], **kwargs):
+    def __init__(self, func, to_track=['num_steps', 'state_norm', 'grad_init'], keep_grads=True, **kwargs):
         super().__init__(**kwargs)
         # f = DynX() # function that specifies \dot{x} = f(Wx)
         # self.func = Func(b, f, **kwargs) # function that specifies the complete system dynamics
@@ -131,12 +126,16 @@ class NeuralODE(eqx.Module):
         self.n_params = self.func.n_params
         self.d = self.func.d
         self.backwardpasser = BackwardPasser(self.func, **kwargs)
+        self.keep_grads = keep_grads
         
-
     def solve(self, ts, y0):
         """
         Compute solution at times ts with initial state y0
         """
+        if self.keep_grads:
+            adj = diffrax.BacksolveAdjoint()
+        else:
+            adj = diffrax.NoAdjoint()
         solution = diffrax.diffeqsolve(
             diffrax.ODETerm(self.func),
             diffrax.Tsit5(),
@@ -146,6 +145,7 @@ class NeuralODE(eqx.Module):
             y0=y0,
             stepsize_controller=diffrax.PIDController(),
             saveat=diffrax.SaveAt(ts=ts),
+            adjoint=adj, 
         )
         return solution
 
@@ -201,7 +201,8 @@ class NeuralODE(eqx.Module):
         if as_dict:
             self.func.set_params(params['func'], as_dict=True)
         else:
-            assert len(params) == self.n_params
+            if self.n_params is not None:
+                assert len(params) == self.n_params
             self.func.set_params(params, as_dict=False)
 
 class SymmetricLoss():
