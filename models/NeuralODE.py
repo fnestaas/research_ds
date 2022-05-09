@@ -133,7 +133,7 @@ class NeuralODE(eqx.Module):
         Compute solution at times ts with initial state y0
         """
         if self.keep_grads:
-            adj = diffrax.BacksolveAdjoint()
+            adj = diffrax.RecursiveCheckpointAdjoint()
         else:
             adj = diffrax.NoAdjoint()
         solution = diffrax.diffeqsolve(

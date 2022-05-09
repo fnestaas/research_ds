@@ -91,11 +91,12 @@ class PDEFunc(Func):
     n_params: int
     seed: int
     N: int # number of integration steps
+    skew: bool
 
     # TODO: check that the norm of the adjoint remains constant
     # TODO: try out a system where we add Bx + f0 to the solution, where B = anti-symmetric, learnable, f0 learnable const
 
-    def __init__(self, d: int, width_size: int, depth: int, seed=0, N=100, **kwargs) -> None:
+    def __init__(self, d: int, width_size: int, depth: int, seed=0, N=100, skew=True, **kwargs) -> None:
         super().__init__(d, **kwargs)
 
         self.d = d
@@ -111,6 +112,7 @@ class PDEFunc(Func):
 
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
         self.N = N
+        self.skew = skew
 
     def __call__(self, ts, x, args):
         # integrate
@@ -126,7 +128,11 @@ class PDEFunc(Func):
         return integral + self.pred_init()
 
     def integrand(self, x, s):
-        out = self.pred_skew(x, s)
+        if self.skew:
+            out = self.pred_skew(x, s)
+        else:
+            d = self.d
+            out = jnp.reshape(self.grad_nn(s*x), (d, d))
         return out @ x
 
     def pred_skew(self, x, s):
@@ -151,4 +157,6 @@ class PDEFunc(Func):
         n_init = self.init_nn.n_params
         self.init_nn.set_params(params[:n_init], as_dict=as_dict)
         self.grad_nn.set_params(params[n_init:], as_dict=as_dict)
+
+
 

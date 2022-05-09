@@ -15,7 +15,7 @@ import optax
 
 import pickle
 
-from torch import isin
+import os
 
 # from import_models import *
 from models.NeuralODE import *
@@ -24,15 +24,44 @@ from models.Func import *
 
 from jax.config import config
 
+import argparse
+
 # config.update('jax_disable_jit', True)
 
-TRACK_STATS = True 
-WHICH_FUNC = 'PDEFunc' # 'PDEFunc' # 'ODE2ODEFunc'
-DO_BACKWARD = True 
-REGULARIZE = False
-PLOT = True
-DEBUG_GRADS = False
+# TRACK_STATS = True 
+# WHICH_FUNC = 'PDEFunc' # 'PDEFunc' # 'ODE2ODEFunc'
+# DO_BACKWARD = True 
+# REGULARIZE = False
+# PLOT = True
+# USE_AUTODIFF = True # uses actual gradients but also allows for checking manual gradient computation
 
+parser = argparse.ArgumentParser('Run first test')
+parser.add_argument('TRACK_STATS', )
+parser.add_argument('WHICH_FUNC', type=str)
+parser.add_argument('DO_BACKWARD', )
+parser.add_argument('REGULARIZE', )
+parser.add_argument('PLOT', )
+parser.add_argument('USE_AUTODIFF', )
+parser.add_argument('SKEW_PDE')
+parser.add_argument('dst', type=str)
+
+args = parser.parse_args()
+
+TRACK_STATS = args.TRACK_STATS == 'True'
+WHICH_FUNC = args.WHICH_FUNC
+DO_BACKWARD = args.DO_BACKWARD == 'True'
+REGULARIZE = args.REGULARIZE == 'True'
+PLOT = args.PLOT == 'True'
+USE_AUTODIFF = args.USE_AUTODIFF == 'True'
+SKEW_PDE = args.SKEW_PDE == 'True'
+dst = args.dst
+
+print('I got these args:', args)
+
+assert PLOT == False
+
+if not USE_AUTODIFF:
+    print('debug grads is false')
 
 def make_np(arr_list):
     try:
@@ -110,12 +139,12 @@ def main(
         cat_dim = 2
     
     elif WHICH_FUNC == 'PDEFunc':
-        func = PDEFunc(d=2, width_size=4, depth=2)
+        func = PDEFunc(d=2, width_size=4, depth=2, skew=SKEW_PDE)
         cat_dim = 0
     else:
         raise NotImplementedError
     
-    model = NeuralODE(func=func, keep_grads=not DO_BACKWARD)
+    model = NeuralODE(func=func, keep_grads=not DO_BACKWARD or USE_AUTODIFF)
     sym_loss = SymmetricLoss(func)
 
     grad_tracker = StatTracker(['adjoint_norm'])
@@ -133,18 +162,19 @@ def main(
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state):
-        if DEBUG_GRADS:
+        assert USE_AUTODIFF or DO_BACKWARD, 'we have to use some gradient'
+        if USE_AUTODIFF:
             loss, grads = grad_loss(model, ti, yi)
             updates, opt_state = optim.update(grads, opt_state)
         if DO_BACKWARD: 
             # compute gradients "manually"
-            y_pred = jax.lax.stop_gradient(jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], False))
+            y_pred = jax.vmap(model, in_axes=(None, 0, None)(ti, yi[:, 0, :], TRACK_STATS and not USE_AUTODIFF))
 
             dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[:, -1, :] # end state of the adjoint
             end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
             joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
             
-            backward_pass = jax.lax.stop_gradient(jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state))
+            backward_pass = jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state)
 
             n_adj = dLdT.shape[-1]
             adjoint = backward_pass.ys[:, :, :n_adj]
@@ -155,7 +185,7 @@ def main(
             computed_grads = -backward_pass.ys[:, :, n_adj:-n_adj]
             
             cp_grads = jnp.sum(jnp.trapz(computed_grads, axis=1, dx=ts[1]-ts[0]), axis=0)
-            if DEBUG_GRADS:
+            if USE_AUTODIFF:
                 true_grads = grads.get_params()
                 scale = jnp.max(jnp.abs(true_grads))/ jnp.max(jnp.abs(cp_grads)) 
                 estimated_grad = scale * cp_grads
@@ -164,11 +194,6 @@ def main(
                 scale = 8 # TODO: Why exactly?
                 estimated_grad = scale * cp_grads
 
-            if isinstance(model.func, PDEFunc):
-                A = jax.jacrev(lambda z: model.func(1, z, []))(jnp.ones((2, ))) 
-                anti_sym_error = jnp.sum(jnp.abs(A + jnp.transpose(A))) # can be large!!
-
-            if not DEBUG_GRADS:
                 # create a gradient to use optim
                 if isinstance(model.func, PDEFunc):
                     fc = PDEFunc(model.func.d, model.func.init_nn.width_size, model.func.init_nn.depth)
@@ -180,13 +205,11 @@ def main(
                 grads.set_params(estimated_grad)
                 grads = eqx.filter(grads, eqx.is_array)
                 updates, opt_state = optim.update(grads, opt_state) 
+
             loss = _loss_func(yi, y_pred)
             if TRACK_STATS:
                 grad_tracker.update({'adjoint_norm': adjoint_norm})
 
-        elif not DEBUG_GRADS:
-            loss, grads = grad_loss(model, ti, yi)
-            updates, opt_state = optim.update(grads, opt_state) 
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
 
@@ -235,25 +258,28 @@ ts, ys, model, grad_tracker = main(
 def save_jnp(to_save, handle):
     pickle.dump(make_np(to_save), handle)
 
+if not os.path.exists(dst):
+    os.makedirs(dst)
+
 # Save the model parameters
-with open('outputs/last_state.pkl', 'wb') as handle:
+with open(dst + '/last_state.pkl', 'wb') as handle:
     save_jnp(model.get_params(), handle)
 
 # Save stats
 if TRACK_STATS:
-    with open('outputs/num_steps.pkl', 'wb') as handle:
+    with open(dst + '/num_steps.pkl', 'wb') as handle:
         to_save = model.get_stats()['num_steps']
         save_jnp(to_save, handle)
         
-    with open('outputs/state_norm.pkl', 'wb') as handle:
+    with open(dst + '/state_norm.pkl', 'wb') as handle:
         to_save = model.get_stats()['state_norm']
         save_jnp(to_save, handle)
 
-    with open('outputs/grad_init.pkl', 'wb') as handle:
+    with open(dst + '/grad_init.pkl', 'wb') as handle:
         to_save = model.get_stats()['grad_init']
         save_jnp(to_save, handle)
 
-    with open('outputs/adjoint_norm.pkl', 'wb') as handle:
+    with open( dst + '/adjoint_norm.pkl', 'wb') as handle:
         to_save = grad_tracker.attributes['adjoint_norm']
         save_jnp(to_save, handle)
 

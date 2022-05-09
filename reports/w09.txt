@@ -1,0 +1,5 @@
+Notes Week 9
+
+Questions:
+Weird adjoint behavior. If I use automatic differentiation, I get much lower variance than if I compute the gradients myself, even though performance is similar.
+TODO: Maybe the gradient computation I make is bad somehow? I don't think it should matter too much for the adjoint though. 
