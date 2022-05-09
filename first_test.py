@@ -139,7 +139,7 @@ def main(
         cat_dim = 2
     
     elif WHICH_FUNC == 'PDEFunc':
-        func = PDEFunc(d=2, width_size=4, depth=2, skew=SKEW_PDE)
+        func = PDEFunc(d=2, width_size=2, depth=2, skew=SKEW_PDE)
         cat_dim = 0
     else:
         raise NotImplementedError
@@ -168,11 +168,14 @@ def main(
             updates, opt_state = optim.update(grads, opt_state)
         if DO_BACKWARD: 
             # compute gradients "manually"
-            y_pred = jax.vmap(model, in_axes=(None, 0, None)(ti, yi[:, 0, :], TRACK_STATS and not USE_AUTODIFF))
+            y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], TRACK_STATS and not USE_AUTODIFF)
 
             dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[:, -1, :] # end state of the adjoint
-            end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
-            joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
+            if not USE_AUTODIFF:
+                end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
+                joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
+            else:
+                joint_end_state = jnp.concatenate([dLdT, y_pred[:, -1, :]], axis=-1)
             
             backward_pass = jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state)
 
@@ -182,15 +185,9 @@ def main(
             adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
             adjoint_errors = jnp.max(adjoint_norm, axis=-1) / jnp.min(adjoint_norm, axis=-1)
             
-            computed_grads = -backward_pass.ys[:, :, n_adj:-n_adj]
-            
-            cp_grads = jnp.sum(jnp.trapz(computed_grads, axis=1, dx=ts[1]-ts[0]), axis=0)
-            if USE_AUTODIFF:
-                true_grads = grads.get_params()
-                scale = jnp.max(jnp.abs(true_grads))/ jnp.max(jnp.abs(cp_grads)) 
-                estimated_grad = scale * cp_grads
-                grad_error = jnp.max(jnp.abs(estimated_grad - true_grads))
-            else:
+            if not USE_AUTODIFF:
+                computed_grads = -backward_pass.ys[:, :, n_adj:-n_adj]
+                cp_grads = jnp.sum(jnp.trapz(computed_grads, axis=1, dx=ts[1]-ts[0]), axis=0)
                 scale = 8 # TODO: Why exactly?
                 estimated_grad = scale * cp_grads
 
@@ -204,7 +201,13 @@ def main(
                 grads = NeuralODE(fc)
                 grads.set_params(estimated_grad)
                 grads = eqx.filter(grads, eqx.is_array)
-                updates, opt_state = optim.update(grads, opt_state) 
+                updates, opt_state = optim.update(grads, opt_state)
+
+            # if USE_AUTODIFF:
+            #     true_grads = grads.get_params()
+            #     scale = jnp.max(jnp.abs(true_grads))/ jnp.max(jnp.abs(cp_grads)) 
+            #     estimated_grad = scale * cp_grads
+            #     grad_error = jnp.max(jnp.abs(estimated_grad - true_grads)) 
 
             loss = _loss_func(yi, y_pred)
             if TRACK_STATS:
@@ -224,11 +227,16 @@ def main(
         for step, (yi,) in zip( 
             range(steps), dataloader((_ys,), batch_size, key=loader_key, cat_dim=cat_dim)
         ):
-            start = time.time()
-            loss, model, opt_state = make_step(_ts, yi, model, opt_state)
-            end = time.time()
-            if (step % print_every) == 0 or step == steps - 1:
-                print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
+            try:
+                start = time.time()
+                loss, model, opt_state = make_step(_ts, yi, model, opt_state)
+                end = time.time()
+                if (step % print_every) == 0 or step == steps - 1:
+                    print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
+            except RuntimeError:
+                import warnings
+                warnings.warn('Max number of function evaluations reached. Aborting.')
+                break # give up...
 
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
@@ -249,7 +257,7 @@ ts, ys, model, grad_tracker = main(
     steps_strategy=(200, 200),
     print_every=100,
     batch_size=50,
-    length_strategy=(.1, 1),
+    length_strategy=(.1, .1),
     lr_strategy=(3e-3, 1e-3),
     plot=PLOT, 
     dataset_size=100,

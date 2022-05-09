@@ -121,9 +121,7 @@ class PDEFunc(Func):
         s = jnp.linspace(0, 1, self.N+1)
         y = jax.vmap(self.integrand, in_axes=(None, 0))(z, s) # A(sx)x
         integral = jnp.trapz(y, x=s, dx=1/self.N, axis=0) 
-        # integral = self.integrand(z, 1) # TODO: for some reason this does not work well with adjoint
-
-        assert integral.shape == (self.d, ), f'shape of integral is {integral.shape}'
+        integral = self.integrand(z, 1) # TODO: for some reason this does not work well with adjoint
 
         return integral + self.pred_init()
 
@@ -140,7 +138,7 @@ class PDEFunc(Func):
         out = self.grad_nn(s*x) # \nabla f(s*x)
         out = jnp.concatenate([out, jnp.zeros(d*d - out.shape[0])]) # make conformable to (d, d)-matrix
         out = jnp.reshape(out, (d, d))
-        out = out - jnp.transpose(out) # TODO: predictions are on the diagonal...
+        out = out - jnp.transpose(out) 
         return out
 
     def pred_init(self):

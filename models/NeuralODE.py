@@ -52,15 +52,19 @@ class BackwardPasser(eqx.Module):
         n = self.d * (self.d + 1)
         adjoint = joint_state[:n]
         x = joint_state[-n:]
+        grad_comp = (2*n < joint_state.shape[0])
 
         dfdz = jax.jacfwd(lambda z: self.func(t, z, args))
-        dfdth = jax.jacfwd(lambda th: self.func_with_params(th)(t, x, args))
 
         t1 = - adjoint @ dfdz(x)
-        t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
         t3 = self.func(t, x, args)
 
-        return jnp.concatenate([t1, t2, t3]) # don't negate; diffrax does that
+        if grad_comp:
+            dfdth = jax.jacfwd(lambda th: self.func_with_params(th)(t, x, args))
+            t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))  
+            return jnp.concatenate([t1, t2, t3]) # don't negate; diffrax does that
+        else:
+            return jnp.concatenate([t1, t2])
 
     def pdefunc_with_params(self, params):
         func = PDEFunc(self.func.d, self.func.grad_nn.width_size, self.func.grad_nn.depth)
@@ -71,15 +75,19 @@ class BackwardPasser(eqx.Module):
         n = self.func.d
         adjoint = joint_state[:n]
         x = joint_state[-n:]
+        grad_comp = (2*n < joint_state.shape[0])
 
         dfdz = jax.jacfwd(lambda z: self.func(t, z, args))
-        dfdth = jax.jacfwd(lambda th: self.pdefunc_with_params(th)(t, x, args))
+        
 
         t1 = - adjoint @ dfdz(x)
-        t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
         t3 = self.func(t, x, args)
-
-        return jnp.concatenate([t1, t2, t3])
+        if grad_comp:
+            dfdth = jax.jacfwd(lambda th: self.pdefunc_with_params(th)(t, x, args))
+            t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
+            return jnp.concatenate([t1, t2, t3])
+        else:
+            return jnp.concatenate([t1, t3])
 
     def backward(self, ts, joint_end_state):
         """
@@ -101,6 +109,7 @@ class BackwardPasser(eqx.Module):
             y0=joint_end_state,
             stepsize_controller=diffrax.PIDController(),
             saveat=saveat,
+            max_steps=2**14,
             # adjoint=diffrax.BacksolveAdjoint(),
         )
         return solution
@@ -172,10 +181,10 @@ class NeuralODE(eqx.Module):
             res['num_steps'] = solution.stats['num_steps']
         if 'state_norm' in keys:
             y_pred = solution.ys
-            res['state_norm'] = jnp.linalg.norm(y_pred)
+            res['state_norm'] = jnp.linalg.norm(y_pred, axis=-1)
         if 'grad_init' in keys: # gradient with respect to initial state
             to_grad = lambda y: self.solve(ts, y)
-            res['grad_init'] = jax.jacfwd(to_grad)(y0).ys[-1, :, :]
+            res['grad_init'] = jax.jacfwd(to_grad)(y0).ys[-1, :]
         return res
     
     def get_stats(self, which=None):
