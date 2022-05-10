@@ -12,6 +12,7 @@ import diffrax
 import equinox as eqx
 import matplotlib.pyplot as plt
 import optax
+from equinox.nn.composed import _identity
 
 import pickle
 
@@ -43,6 +44,8 @@ parser.add_argument('REGULARIZE', )
 parser.add_argument('PLOT', )
 parser.add_argument('USE_AUTODIFF', )
 parser.add_argument('SKEW_PDE')
+parser.add_argument('INTEGRATE')
+parser.add_argument('FINAL_ACTIVATION')
 parser.add_argument('dst', type=str)
 
 args = parser.parse_args()
@@ -54,6 +57,8 @@ REGULARIZE = args.REGULARIZE == 'True'
 PLOT = args.PLOT == 'True'
 USE_AUTODIFF = args.USE_AUTODIFF == 'True'
 SKEW_PDE = args.SKEW_PDE == 'True'
+INTEGRATE = args.INTEGRATE == 'True'
+FINAL_ACTIVATION = args.FINAL_ACTIVATION
 dst = args.dst
 
 print('I got these args:', args)
@@ -139,7 +144,15 @@ def main(
         cat_dim = 2
     
     elif WHICH_FUNC == 'PDEFunc':
-        func = PDEFunc(d=2, width_size=2, depth=2, skew=SKEW_PDE)
+        if FINAL_ACTIVATION == 'identity':
+            final_activation = _identity
+        elif FINAL_ACTIVATION == 'swish':
+            final_activation = jnn.swish
+        elif FINAL_ACTIVATION =='sigmoid':
+            final_activation = jnn.sigmoid
+        else:
+            raise NotImplementedError
+        func = PDEFunc(d=2, width_size=2, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation)
         cat_dim = 0
     else:
         raise NotImplementedError
@@ -202,13 +215,7 @@ def main(
                 grads.set_params(estimated_grad)
                 grads = eqx.filter(grads, eqx.is_array)
                 updates, opt_state = optim.update(grads, opt_state)
-
-            # if USE_AUTODIFF:
-            #     true_grads = grads.get_params()
-            #     scale = jnp.max(jnp.abs(true_grads))/ jnp.max(jnp.abs(cp_grads)) 
-            #     estimated_grad = scale * cp_grads
-            #     grad_error = jnp.max(jnp.abs(estimated_grad - true_grads)) 
-
+                
             loss = _loss_func(yi, y_pred)
             if TRACK_STATS:
                 grad_tracker.update({'adjoint_norm': adjoint_norm})
@@ -257,7 +264,7 @@ ts, ys, model, grad_tracker = main(
     steps_strategy=(200, 200),
     print_every=100,
     batch_size=50,
-    length_strategy=(.1, .1),
+    length_strategy=(.1, 1),
     lr_strategy=(3e-3, 1e-3),
     plot=PLOT, 
     dataset_size=100,
