@@ -2,25 +2,25 @@ import matplotlib.pyplot as plt
 import joblib 
 import numpy as np 
 
-folders = [ 
-    'PDEFuncidentity_skew', 
-    'PDEFuncswish_skew',
-    'PDEFuncsigmoid_skew'
+# folders = [ 
+#     'PDEFuncidentity_skew', 
+#     'PDEFuncswish_skew',
+#     'PDEFuncsigmoid_skew', 
+#     'PDEFuncabs_skew'
+# ]
+
+folders = [
+    'skew_integrate0',
+    'skew_integrate1',
 ]
 
 fig, axs = plt.subplots(1, 2, figsize=(2, 1))
 y_max = 0
 
-for folder in folders:
-    adjoints = joblib.load(folder + '/adjoint_norm.pkl')
+for i, folder in enumerate(folders):
+    adjoints = joblib.load('tests/' + folder + '/adjoint_norm.pkl')
     if len(adjoints) > 0:
-        # if folder[-4:] == 'skew':
-        #     label = 'skew-symmetric'
-        # else:
-        #     label = 'unrestricted'
-        if folder == 'PDEFuncswish_skew': label = 'swish'
-        elif folder == 'PDEFuncidentity_skew': label = 'identity'
-        else: label = 'sigmoid'
+        label = str(i)
         mean_var = [np.mean(np.var(adjoint, axis=-1)) for adjoint in adjoints]
         epochs = np.arange(len(adjoints))
         y_max = max([y_max, 1.1*max(mean_var)])

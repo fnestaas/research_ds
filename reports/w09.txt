@@ -1,5 +1,25 @@
 Notes Week 9
 
-Questions:
-Weird adjoint behavior. If I use automatic differentiation, I get much lower variance than if I compute the gradients myself, even though performance is similar.
-TODO: Maybe the gradient computation I make is bad somehow? I don't think it should matter too much for the adjoint though. 
+What I did this week:
+Prepared presentation
+Made tests easily runnable
+Compared different final acitvations, integrating vs not integrating
+Thought about symmetric part of jacobian; if we integrate, then the symmetric part S satisfies x^T S x = 0 for all x
+Worked on report;
+simplified proofs
+Made report more complete
+Wrote some examples
+
+Next week:
+
+change presentation; 
+Some normalization in the plots of the adjoint norm? E.g. max(norm)/min(norm) or quantiles
+Idea: add a slide on which metrics make sense BEFORE showing the plots
+Change "sample adjoint" to "... norm", also label axes
+Also clearify we are seeing exploding gradients in the plot
+Try different random seeds - especially B(x) vs A(sx), plot uncertainties
+
+Hold presentation
+Think about difference between integrating/not integrating to get f_\theta(z, t)
+
+

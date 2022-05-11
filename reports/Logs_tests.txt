@@ -1,0 +1,740 @@
+source /home/fredrik/miniconda3/bin/activate
+(base) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ source /home/fredrik/miniconda3/bin/activate
+(base) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ conda activate rds_env
+(rds_env) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ /home/fredrik/miniconda3/envs/rds_env/bin/python /home/fredrik/Documents/School/S8/RDS/research_ds/test.py
+Traceback (most recent call last):
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 62, in <module>
+    main()
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 22, in main
+    subprocess.run([
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 493, in run
+    with Popen(*popenargs, **kwargs) as process:
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 858, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1639, in _execute_child
+    self.pid = _posixsubprocess.fork_exec(
+TypeError: expected str, bytes or os.PathLike object, not int
+(rds_env) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ /home/fredrik/miniconda3/envs/rds_env/bin/python /home/fredrik/Documents/School/S8/RDS/research_ds/test.py
+2022-05-11 11:32:33.188062: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='0', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='skew_integrate0')
+
+
+seed = 0
+
+
+Step: 0, Loss: 0.07709471136331558, Computation time: 62.67621684074402
+Step: 100, Loss: 0.008633396588265896, Computation time: 0.12632369995117188
+Step: 199, Loss: 0.0040672109462320805, Computation time: 0.12987756729125977
+Step: 0, Loss: 0.030785225331783295, Computation time: 64.55756258964539
+Step: 100, Loss: 0.011236893944442272, Computation time: 0.3084261417388916
+Step: 199, Loss: 0.012519471347332, Computation time: 0.3688545227050781
+Traceback (most recent call last):
+  File "first_test.py", line 285, in <module>
+    with open('tests/' + dst + '/last_state.pkl', 'wb') as handle:
+FileNotFoundError: [Errno 2] No such file or directory: 'tests/skew_integrate0/last_state.pkl'
+2022-05-11 11:36:18.123658: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='1', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='skew_integrate1')
+
+
+seed = 1
+
+
+^CTraceback (most recent call last):
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 62, in <module>
+    main()
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 22, in main
+    subprocess.run([
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 495, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1020, in communicate
+    self.wait()
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1083, in wait
+    return self._wait(timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1806, in _wait
+    (pid, sts) = self._try_wait(0)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1764, in _try_wait
+    (pid, sts) = os.waitpid(self.pid, wait_flags)
+KeyboardInterrupt
+
+(rds_env) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ /home/fredrik/miniconda3/envs/rds_env/bin/python /home/fredrik/Documents/School/S8/RDS/research_ds/test.py
+2022-05-11 11:38:25.595254: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='0', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate0')
+
+
+seed = 0
+
+
+^CTraceback (most recent call last):
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 62, in <module>
+    main()
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 22, in main
+    subprocess.run([
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 495, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1020, in communicate
+    self.wait()
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1083, in wait
+    return self._wait(timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1806, in _wait
+    (pid, sts) = self._try_wait(0)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1764, in _try_wait
+    (pid, sts) = os.waitpid(self.pid, wait_flags)
+KeyboardInterrupt
+
+(rds_env) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ /home/fredrik/miniconda3/envs/rds_env/bin/python /home/fredrik/Documents/School/S8/RDS/research_ds/test.py
+2022-05-11 11:38:57.718781: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='0', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate0')
+
+
+seed = 0
+
+
+Step: 0, Loss: 0.07709471136331558, Computation time: 68.64213609695435
+Step: 100, Loss: 0.008633396588265896, Computation time: 0.12669658660888672
+Step: 199, Loss: 0.0040672109462320805, Computation time: 0.13530755043029785
+Step: 0, Loss: 0.030785225331783295, Computation time: 71.38670229911804
+Step: 100, Loss: 0.011236893944442272, Computation time: 0.31748199462890625
+Step: 199, Loss: 0.012519471347332, Computation time: 0.3136887550354004
+2022-05-11 11:42:55.843378: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='1', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate1')
+
+
+seed = 1
+
+
+Step: 0, Loss: 0.042901985347270966, Computation time: 64.00265312194824
+Step: 100, Loss: 0.014562452211976051, Computation time: 0.1262226104736328
+Step: 199, Loss: 0.010031450539827347, Computation time: 0.1488184928894043
+Step: 0, Loss: 0.06009165570139885, Computation time: 65.51097774505615
+Step: 100, Loss: 0.04350998252630234, Computation time: 0.26728153228759766
+Step: 199, Loss: 0.04291315749287605, Computation time: 0.25461411476135254
+2022-05-11 11:46:34.856334: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='2', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate2')
+
+
+seed = 2
+
+
+Step: 0, Loss: 0.08893617987632751, Computation time: 60.98256826400757
+Step: 100, Loss: 0.008814696222543716, Computation time: 0.12610602378845215
+Step: 199, Loss: 0.011428704485297203, Computation time: 0.125657320022583
+Step: 0, Loss: 0.07299017906188965, Computation time: 66.04385352134705
+Step: 100, Loss: 0.06922946870326996, Computation time: 0.23763012886047363
+Step: 199, Loss: 0.05849577486515045, Computation time: 0.2628343105316162
+2022-05-11 11:50:05.631575: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='3', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate3')
+
+
+seed = 3
+
+
+Step: 0, Loss: 0.0947982519865036, Computation time: 64.97868251800537
+Step: 100, Loss: 0.011345116421580315, Computation time: 0.1294422149658203
+Step: 199, Loss: 0.004805889446288347, Computation time: 0.13625288009643555
+Step: 0, Loss: 0.08253832906484604, Computation time: 72.92919445037842
+Step: 100, Loss: 0.04906018078327179, Computation time: 0.3207437992095947
+Step: 199, Loss: 0.02374858222901821, Computation time: 0.27834248542785645
+2022-05-11 11:53:58.832104: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='4', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate4')
+
+
+seed = 4
+
+
+Step: 0, Loss: 0.10068616271018982, Computation time: 64.48018479347229
+Step: 100, Loss: 0.013029753230512142, Computation time: 0.12753868103027344
+Step: 199, Loss: 0.009837706573307514, Computation time: 0.1271519660949707
+Step: 0, Loss: 0.06471817195415497, Computation time: 67.98123168945312
+Step: 100, Loss: 0.0675724446773529, Computation time: 0.21602725982666016
+Step: 199, Loss: 0.06301941722631454, Computation time: 0.21474766731262207
+2022-05-11 11:57:33.464308: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='5', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate5')
+
+
+seed = 5
+
+
+Step: 0, Loss: 0.17784219980239868, Computation time: 65.9497902393341
+Step: 100, Loss: 0.010731144808232784, Computation time: 0.15595698356628418
+Step: 199, Loss: 0.007934854365885258, Computation time: 0.1381394863128662
+Step: 0, Loss: 0.09120874106884003, Computation time: 67.82781863212585
+Step: 100, Loss: 0.041445691138505936, Computation time: 0.254209041595459
+Step: 199, Loss: 0.030761729925870895, Computation time: 0.2651190757751465
+2022-05-11 12:01:19.695718: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='6', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate6')
+
+
+seed = 6
+
+
+Step: 0, Loss: 0.14033032953739166, Computation time: 65.08291435241699
+Step: 100, Loss: 0.010017873719334602, Computation time: 0.1303722858428955
+Step: 199, Loss: 0.008170059882104397, Computation time: 0.1258411407470703
+Step: 0, Loss: 0.07120303809642792, Computation time: 69.26255536079407
+Step: 100, Loss: 0.060698412358760834, Computation time: 0.25414395332336426
+Step: 199, Loss: 0.04791989549994469, Computation time: 0.2472386360168457
+2022-05-11 12:04:55.933023: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='7', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate7')
+
+
+seed = 7
+
+
+Step: 0, Loss: 0.04932444915175438, Computation time: 65.26259350776672
+Step: 100, Loss: 0.008052805438637733, Computation time: 0.12604403495788574
+Step: 199, Loss: 0.004958957899361849, Computation time: 0.13316869735717773
+Step: 0, Loss: 0.061355527490377426, Computation time: 63.77945113182068
+Step: 100, Loss: 0.030438246205449104, Computation time: 0.29115986824035645
+Step: 199, Loss: 0.014363427646458149, Computation time: 0.2861170768737793
+2022-05-11 12:08:37.987221: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='8', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate8')
+
+
+seed = 8
+
+
+Step: 0, Loss: 0.09635338932275772, Computation time: 66.64271783828735
+Step: 100, Loss: 0.005641874857246876, Computation time: 0.17394304275512695
+Step: 199, Loss: 0.003913854714483023, Computation time: 0.1453099250793457
+Step: 0, Loss: 0.03306751698255539, Computation time: 73.72684240341187
+Step: 100, Loss: 0.01891648955643177, Computation time: 0.28067779541015625
+Step: 199, Loss: 0.013677213340997696, Computation time: 0.28553271293640137
+2022-05-11 12:12:37.921460: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='9', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate9')
+
+
+seed = 9
+
+
+Step: 0, Loss: 0.10678327083587646, Computation time: 61.96654558181763
+Step: 100, Loss: 0.013775584287941456, Computation time: 0.1263294219970703
+Step: 199, Loss: 0.009628646075725555, Computation time: 0.1261000633239746
+Step: 0, Loss: 0.0803375244140625, Computation time: 69.80985713005066
+Step: 100, Loss: 0.0633520558476448, Computation time: 0.2489173412322998
+Step: 199, Loss: 0.05244310200214386, Computation time: 0.25635266304016113
+2022-05-11 12:16:18.324177: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='0', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral0')
+
+
+seed = 0
+
+
+Step: 0, Loss: 0.0772668868303299, Computation time: 49.10196256637573
+Step: 100, Loss: 0.00604862067848444, Computation time: 0.059403419494628906
+Step: 199, Loss: 0.003736520418897271, Computation time: 0.06205487251281738
+Step: 0, Loss: 0.04918251186609268, Computation time: 50.22224998474121
+Step: 100, Loss: 0.015132811851799488, Computation time: 0.09276270866394043
+Step: 199, Loss: 0.016928210854530334, Computation time: 0.08907914161682129
+2022-05-11 12:18:37.683223: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='1', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral1')
+
+
+seed = 1
+
+
+Step: 0, Loss: 0.04242538660764694, Computation time: 52.43898892402649
+Step: 100, Loss: 0.014660272747278214, Computation time: 0.05978107452392578
+Step: 199, Loss: 0.010505180805921555, Computation time: 0.05966544151306152
+Step: 0, Loss: 0.08097755163908005, Computation time: 51.36685132980347
+Step: 100, Loss: 0.04259519651532173, Computation time: 0.0879354476928711
+Step: 199, Loss: 0.03474247828125954, Computation time: 0.08665752410888672
+2022-05-11 12:21:00.713666: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='2', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral2')
+
+
+seed = 2
+
+
+Step: 0, Loss: 0.08893616497516632, Computation time: 49.280885219573975
+Step: 100, Loss: 0.008814697153866291, Computation time: 0.05822253227233887
+Step: 199, Loss: 0.01142873801290989, Computation time: 0.05944967269897461
+Step: 0, Loss: 0.07299027591943741, Computation time: 52.693190574645996
+Step: 100, Loss: 0.06922903656959534, Computation time: 0.08583998680114746
+Step: 199, Loss: 0.05849505588412285, Computation time: 0.0848994255065918
+2022-05-11 12:23:21.042362: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='3', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral3')
+
+
+seed = 3
+
+
+Step: 0, Loss: 0.09474512189626694, Computation time: 49.48229241371155
+Step: 100, Loss: 0.009487173520028591, Computation time: 0.05797457695007324
+Step: 199, Loss: 0.004163636360317469, Computation time: 0.05994057655334473
+Step: 0, Loss: 0.07341700047254562, Computation time: 53.183682918548584
+Step: 100, Loss: 0.040249262005090714, Computation time: 0.09002351760864258
+Step: 199, Loss: 0.015855999663472176, Computation time: 0.08951878547668457
+2022-05-11 12:25:43.030206: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='4', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral4')
+
+
+seed = 4
+
+
+Step: 0, Loss: 0.10068616271018982, Computation time: 48.26912021636963
+Step: 100, Loss: 0.013029751367866993, Computation time: 0.05784940719604492
+Step: 199, Loss: 0.009837714023888111, Computation time: 0.05874204635620117
+Step: 0, Loss: 0.06471608579158783, Computation time: 50.47317028045654
+Step: 100, Loss: 0.06756273657083511, Computation time: 0.08091449737548828
+Step: 199, Loss: 0.06302082538604736, Computation time: 0.07976865768432617
+2022-05-11 12:27:58.993246: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='5', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral5')
+
+
+seed = 5
+
+
+Step: 0, Loss: 0.17820625007152557, Computation time: 48.73906445503235
+Step: 100, Loss: 0.010685714893043041, Computation time: 0.05839800834655762
+Step: 199, Loss: 0.007692555896937847, Computation time: 0.0600740909576416
+Step: 0, Loss: 0.09666628390550613, Computation time: 51.05112862586975
+Step: 100, Loss: 0.04632613807916641, Computation time: 0.08727812767028809
+Step: 199, Loss: 0.033212047070264816, Computation time: 0.08725261688232422
+2022-05-11 12:30:18.067408: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='6', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral6')
+
+
+seed = 6
+
+
+Step: 0, Loss: 0.14033032953739166, Computation time: 49.92906951904297
+Step: 100, Loss: 0.01001785695552826, Computation time: 0.05852103233337402
+Step: 199, Loss: 0.008170056156814098, Computation time: 0.058522701263427734
+Step: 0, Loss: 0.07119525223970413, Computation time: 50.78041124343872
+Step: 100, Loss: 0.060694944113492966, Computation time: 0.08551812171936035
+Step: 199, Loss: 0.04791834577918053, Computation time: 0.08020424842834473
+2022-05-11 12:32:37.021425: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='7', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral7')
+
+
+seed = 7
+
+
+Step: 0, Loss: 0.05019649863243103, Computation time: 48.36493134498596
+Step: 100, Loss: 0.007226054091006517, Computation time: 0.05918002128601074
+Step: 199, Loss: 0.005251305177807808, Computation time: 0.06007218360900879
+Step: 0, Loss: 0.05734241008758545, Computation time: 51.13670897483826
+Step: 100, Loss: 0.027356615290045738, Computation time: 0.0905296802520752
+Step: 199, Loss: 0.01817663013935089, Computation time: 0.09331226348876953
+2022-05-11 12:34:55.656677: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='8', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral8')
+
+
+seed = 8
+
+
+Step: 0, Loss: 0.09627880156040192, Computation time: 47.64823079109192
+Step: 100, Loss: 0.005190248601138592, Computation time: 0.05823779106140137
+Step: 199, Loss: 0.0038384266663342714, Computation time: 0.05910086631774902
+Step: 0, Loss: 0.03950026258826256, Computation time: 50.586134910583496
+Step: 100, Loss: 0.02146320417523384, Computation time: 0.09132552146911621
+Step: 199, Loss: 0.016713695600628853, Computation time: 0.08852982521057129
+2022-05-11 12:37:13.025635: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='False', PLOT='False', REGULARIZE='False', SEED='9', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_no_integral9')
+
+
+seed = 9
+
+
+Step: 0, Loss: 0.10567096620798111, Computation time: 47.54690146446228
+Step: 100, Loss: 0.013965649530291557, Computation time: 0.05710101127624512
+Step: 199, Loss: 0.009158706292510033, Computation time: 0.05714678764343262
+Step: 0, Loss: 0.09441305696964264, Computation time: 49.99697208404541
+Step: 100, Loss: 0.066379614174366, Computation time: 0.08303976058959961
+Step: 199, Loss: 0.057579442858695984, Computation time: 0.08061933517456055
+2022-05-11 12:39:28.293228: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='0', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_integrate0')
+
+
+seed = 0
+
+
+^CTraceback (most recent call last):
+  File "first_test.py", line 270, in <module>
+    ts, ys, model, grad_tracker = main(
+  File "first_test.py", line 246, in main
+    loss, model, opt_state = make_step(_ts, yi, model, opt_state)
+  File "first_test.py", line 187, in make_step
+    loss, grads = grad_loss(model, ti, yi)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/equinox/grad.py", line 31, in fun_value_and_grad_wrapper
+    return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/traceback_util.py", line 162, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/api.py", line 952, in value_and_grad_f
+    ans, vjp_py = _vjp(f_partial, *dyn_args, reduce_axes=reduce_axes)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/api.py", line 2408, in _vjp
+    out_primal, out_vjp = ad.vjp(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/ad.py", line 119, in vjp
+    out_primals, pvals, jaxpr, consts = linearize(traceable, *primals)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/ad.py", line 106, in linearize
+    jaxpr, out_pvals, consts = pe.trace_to_jaxpr(jvpfun_flat, in_pvals)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/profiler.py", line 206, in wrapper
+    return func(*args, **kwargs)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/partial_eval.py", line 592, in trace_to_jaxpr
+    jaxpr, (out_pvals, consts, env) = fun.call_wrapped(pvals)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/linear_util.py", line 166, in call_wrapped
+    ans = self.f(*args, **dict(self.params, **kwargs))
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/equinox/grad.py", line 26, in fun_value_and_grad
+    return fun(x, *args, **kwargs)
+  File "first_test.py", line 177, in grad_loss
+    y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], TRACK_STATS)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/traceback_util.py", line 162, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/api.py", line 1438, in vmap_f
+    out_flat = batching.batch(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/linear_util.py", line 166, in call_wrapped
+    ans = self.f(*args, **dict(self.params, **kwargs))
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/models/NeuralODE.py", line 171, in __call__
+    self.stats.update(self.compute_stats(solution, ts, y0))
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/models/NeuralODE.py", line 187, in compute_stats
+    res['grad_init'] = jax.jacfwd(to_grad)(y0).ys[-1, :]
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/api.py", line 1061, in jacfun
+    y, jac = vmap(pushfwd, out_axes=(None, -1))(_std_basis(dyn_args))
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/traceback_util.py", line 162, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/api.py", line 1438, in vmap_f
+    out_flat = batching.batch(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/linear_util.py", line 166, in call_wrapped
+    ans = self.f(*args, **dict(self.params, **kwargs))
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/api.py", line 2195, in _jvp
+    out_primals, out_tangents = ad.jvp(flat_fun).call_wrapped(ps_flat, ts_flat)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/linear_util.py", line 166, in call_wrapped
+    ans = self.f(*args, **dict(self.params, **kwargs))
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/models/NeuralODE.py", line 186, in <lambda>
+    to_grad = lambda y: self.solve(ts, y)
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/models/NeuralODE.py", line 148, in solve
+    solution = diffrax.diffeqsolve(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/equinox/jit.py", line 108, in fun_wrapper
+    dynamic_out, static_out = _f_wrapped_cache(inner_fun, **jitkwargs)(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/traceback_util.py", line 162, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/api.py", line 432, in cache_miss
+    out_flat = xla.xla_call(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1709, in bind
+    return call_bind(self, fun, *args, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1721, in call_bind
+    outs = top_trace.process_call(primitive, fun, tracers, params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/ad.py", line 331, in process_call
+    result = call_primitive.bind(f_jvp, *primals, *nonzero_tangents, **new_params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1709, in bind
+    return call_bind(self, fun, *args, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1721, in call_bind
+    outs = top_trace.process_call(primitive, fun, tracers, params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/batching.py", line 217, in process_call
+    vals_out = call_primitive.bind(f, *vals, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1709, in bind
+    return call_bind(self, fun, *args, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1721, in call_bind
+    outs = top_trace.process_call(primitive, fun, tracers, params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/batching.py", line 217, in process_call
+    vals_out = call_primitive.bind(f, *vals, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1709, in bind
+    return call_bind(self, fun, *args, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1721, in call_bind
+    outs = top_trace.process_call(primitive, fun, tracers, params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/ad.py", line 331, in process_call
+    result = call_primitive.bind(f_jvp, *primals, *nonzero_tangents, **new_params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1709, in bind
+    return call_bind(self, fun, *args, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1721, in call_bind
+    outs = top_trace.process_call(primitive, fun, tracers, params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/partial_eval.py", line 207, in process_call
+    out = primitive.bind(f, *in_consts, **const_params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1709, in bind
+    return call_bind(self, fun, *args, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 1721, in call_bind
+    outs = top_trace.process_call(primitive, fun, tracers, params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/core.py", line 614, in process_call
+    return primitive.impl(f, *tracers, **params)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/dispatch.py", line 142, in _xla_call_impl
+    compiled_fun = _xla_callable(fun, device, backend, name, donated_invars,
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/linear_util.py", line 272, in memoized_fun
+    ans = call(fun, *args)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/dispatch.py", line 169, in _xla_callable_uncached
+    return lower_xla_callable(fun, device, backend, name, donated_invars,
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/profiler.py", line 206, in wrapper
+    return func(*args, **kwargs)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/dispatch.py", line 258, in lower_xla_callable
+    module = mlir.lower_jaxpr_to_module(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 490, in lower_jaxpr_to_module
+    lower_jaxpr_to_fun(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 635, in lower_jaxpr_to_fun
+    out_vals = jaxpr_subcomp(ctx.replace(name_stack=callee_name_stack),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 757, in f_lowered
+    return jaxpr_subcomp(ctx.module_context, jaxpr, _ir_consts(consts),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/lax/control_flow.py", line 697, in _while_lowering
+    new_z = mlir.jaxpr_subcomp(body_ctx, body_jaxpr.jaxpr,
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/lax/control_flow.py", line 1334, in _cond_lowering
+    out_vals = mlir.jaxpr_subcomp(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 757, in f_lowered
+    return jaxpr_subcomp(ctx.module_context, jaxpr, _ir_consts(consts),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/lax/control_flow.py", line 697, in _while_lowering
+    new_z = mlir.jaxpr_subcomp(body_ctx, body_jaxpr.jaxpr,
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/lax/control_flow.py", line 1334, in _cond_lowering
+    out_vals = mlir.jaxpr_subcomp(
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 757, in f_lowered
+    return jaxpr_subcomp(ctx.module_context, jaxpr, _ir_consts(consts),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/lax/control_flow.py", line 697, in _while_lowering
+    new_z = mlir.jaxpr_subcomp(body_ctx, body_jaxpr.jaxpr,
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/interpreters/mlir.py", line 722, in jaxpr_subcomp
+    ans = rule(rule_ctx, *map(_unwrap_singleton_ir_values, in_nodes),
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/lax/lax.py", line 2223, in _compare_lower_mhlo
+    if dtypes.issubdtype(x_aval.dtype, np.inexact):
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/dtypes.py", line 213, in issubdtype
+    if not _issubclass(b, np.generic):
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/site-packages/jax/_src/dtypes.py", line 200, in _issubclass
+    try:
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 62, in <module>
+    main()
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 45, in main
+    subprocess.run([
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 495, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1020, in communicate
+    self.wait()
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1083, in wait
+    return self._wait(timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1806, in _wait
+    (pid, sts) = self._try_wait(0)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1764, in _try_wait
+    (pid, sts) = os.waitpid(self.pid, wait_flags)
+KeyboardInterrupt
+
+(rds_env) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ /home/fredrik/miniconda3/envs/rds_env/bin/python /home/fredrik/Documents/School/S8/RDS/research_ds/test.py
+2022-05-11 12:40:48.707614: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='0', SKEW_PDE='True', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/skew_always_integrate0')
+
+
+seed = 0
+
+
+Step: 0, Loss: 0.07709471136331558, Computation time: 62.41837763786316
+Step: 100, Loss: 0.008633396588265896, Computation time: 0.12772107124328613
+Step: 199, Loss: 0.0040672109462320805, Computation time: 0.1320812702178955
+^CTraceback (most recent call last):
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 62, in <module>
+    main()
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 45, in main
+    subprocess.run([
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 495, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1020, in communicate
+    self.wait()
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1083, in wait
+    return self._wait(timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1806, in _wait
+    (pid, sts) = self._try_wait(0)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1764, in _try_wait
+    (pid, sts) = os.waitpid(self.pid, wait_flags)
+KeyboardInterrupt
+
+(rds_env) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ /home/fredrik/miniconda3/envs/rds_env/bin/python /home/fredrik/Documents/School/S8/RDS/research_ds/test.py
+2022-05-11 12:43:56.087870: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='0', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate0')
+
+
+seed = 0
+
+
+Step: 0, Loss: 0.08637699484825134, Computation time: 63.311938762664795
+Step: 100, Loss: 0.015534291043877602, Computation time: 0.12583017349243164
+Step: 199, Loss: 0.010841255076229572, Computation time: 0.1262052059173584
+ERROR:absl:Outside call <function _call.<locals>.<lambda> at 0x7f2c890b0430> threw exception The maximum number of solver steps was reached. Try increasing `max_steps`..
+first_test.py:252: UserWarning: Max number of function evaluations reached. Aborting.
+  warnings.warn('Max number of function evaluations reached. Aborting.')
+2022-05-11 12:47:08.208094: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='1', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate1')
+
+
+seed = 1
+
+
+Step: 0, Loss: 0.06836717575788498, Computation time: 60.90004539489746
+Step: 100, Loss: 0.012624628841876984, Computation time: 0.12641596794128418
+Step: 199, Loss: 0.010051931254565716, Computation time: 0.12654805183410645
+ERROR:absl:Outside call <function _call.<locals>.<lambda> at 0x7f228fa93430> threw exception The maximum number of solver steps was reached. Try increasing `max_steps`..
+first_test.py:252: UserWarning: Max number of function evaluations reached. Aborting.
+  warnings.warn('Max number of function evaluations reached. Aborting.')
+2022-05-11 12:50:16.604922: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='2', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate2')
+
+
+seed = 2
+
+
+Step: 0, Loss: 0.21645215153694153, Computation time: 59.84971761703491
+Step: 100, Loss: 0.015674343332648277, Computation time: 0.12481117248535156
+Step: 199, Loss: 0.014126288704574108, Computation time: 0.12603020668029785
+Step: 0, Loss: 0.19517672061920166, Computation time: 62.90476942062378
+Step: 100, Loss: 0.06687087565660477, Computation time: 0.22150564193725586
+Step: 199, Loss: 0.0561668798327446, Computation time: 0.24019145965576172
+2022-05-11 12:53:39.449312: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='3', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate3')
+
+
+seed = 3
+
+
+Step: 0, Loss: 0.29342415928840637, Computation time: 61.32498526573181
+Step: 100, Loss: 0.02848500944674015, Computation time: 0.1255509853363037
+Step: 199, Loss: 0.013139069080352783, Computation time: 0.12478327751159668
+Step: 0, Loss: 0.07338713109493256, Computation time: 62.618977308273315
+Step: 100, Loss: 0.08568619191646576, Computation time: 0.23575425148010254
+Step: 199, Loss: 0.058138158172369, Computation time: 0.2260279655456543
+2022-05-11 12:57:04.953330: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='4', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate4')
+
+
+seed = 4
+
+
+Step: 0, Loss: 0.1401873081922531, Computation time: 59.46375012397766
+Step: 100, Loss: 0.03337516263127327, Computation time: 0.12440800666809082
+Step: 199, Loss: 0.010671732015907764, Computation time: 0.12366533279418945
+Step: 0, Loss: 0.11869245022535324, Computation time: 63.26425051689148
+Step: 100, Loss: 0.06455156207084656, Computation time: 0.21082544326782227
+Step: 199, Loss: 0.05698421597480774, Computation time: 0.21708178520202637
+2022-05-11 13:00:26.711040: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='5', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate5')
+
+
+seed = 5
+
+
+^CTraceback (most recent call last):
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 62, in <module>
+    main()
+  File "/home/fredrik/Documents/School/S8/RDS/research_ds/test.py", line 45, in main
+    subprocess.run([
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 495, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1020, in communicate
+    self.wait()
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1083, in wait
+    return self._wait(timeout=timeout)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1806, in _wait
+    (pid, sts) = self._try_wait(0)
+  File "/home/fredrik/miniconda3/envs/rds_env/lib/python3.8/subprocess.py", line 1764, in _try_wait
+    (pid, sts) = os.waitpid(self.pid, wait_flags)
+KeyboardInterrupt
+
+(rds_env) fredrik@fredrik-HP-ENVY-x360-Convertible-15-eu0xxx:~/Documents/School/S8/RDS/research_ds$ /home/fredrik/miniconda3/envs/rds_env/bin/python /home/fredrik/Documents/School/S8/RDS/research_ds/test.py
+2022-05-11 13:02:07.600045: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='5', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate5')
+
+
+seed = 5
+
+
+Step: 0, Loss: 0.14877519011497498, Computation time: 61.80374240875244
+Step: 100, Loss: 0.013069353066384792, Computation time: 0.126356840133667
+Step: 199, Loss: 0.011334690265357494, Computation time: 0.12477540969848633
+ERROR:absl:Outside call <function _call.<locals>.<lambda> at 0x7fc054353430> threw exception The maximum number of solver steps was reached. Try increasing `max_steps`..
+first_test.py:252: UserWarning: Max number of function evaluations reached. Aborting.
+  warnings.warn('Max number of function evaluations reached. Aborting.')
+2022-05-11 13:05:15.972692: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='6', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate6')
+
+
+seed = 6
+
+
+Step: 0, Loss: 0.1416998952627182, Computation time: 62.7960638999939
+Step: 100, Loss: 0.026503324508666992, Computation time: 0.12207198143005371
+Step: 199, Loss: 0.00930804293602705, Computation time: 0.12624406814575195
+Step: 0, Loss: 0.0959104672074318, Computation time: 64.52463936805725
+Step: 100, Loss: 0.056034594774246216, Computation time: 0.22866177558898926
+Step: 199, Loss: 0.04602896422147751, Computation time: 0.23935341835021973
+2022-05-11 13:08:44.764398: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='7', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate7')
+
+
+seed = 7
+
+
+Step: 0, Loss: 0.07105081528425217, Computation time: 62.17904591560364
+Step: 100, Loss: 0.012019705027341843, Computation time: 0.13121652603149414
+Step: 199, Loss: 0.011342200450599194, Computation time: 0.13005685806274414
+Step: 0, Loss: 0.06123405694961548, Computation time: 68.39171171188354
+Step: 100, Loss: 0.05799941346049309, Computation time: 0.24440455436706543
+Step: 199, Loss: 0.04283781722187996, Computation time: 0.24769854545593262
+2022-05-11 13:12:21.193626: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='8', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate8')
+
+
+seed = 8
+
+
+Step: 0, Loss: 0.267921507358551, Computation time: 60.65429329872131
+Step: 100, Loss: 0.015126821584999561, Computation time: 0.12589383125305176
+Step: 199, Loss: 0.006668751128017902, Computation time: 0.1323239803314209
+Step: 0, Loss: 0.05936534330248833, Computation time: 64.23542618751526
+Step: 100, Loss: 0.042258214205503464, Computation time: 0.2600545883178711
+Step: 199, Loss: 0.030718406662344933, Computation time: 0.2617213726043701
+2022-05-11 13:15:54.286013: E external/org_tensorflow/tensorflow/stream_executor/cuda/cuda_driver.cc:271] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+WARNING:absl:No GPU/TPU found, falling back to CPU. (Set TF_CPP_MIN_LOG_LEVEL=0 and rerun for more info.)
+I got these args: Namespace(DO_BACKWARD='True', FINAL_ACTIVATION='identity', INTEGRATE='True', PLOT='False', REGULARIZE='False', SEED='9', SKEW_PDE='False', TRACK_STATS='True', USE_AUTODIFF='True', WHICH_FUNC='PDEFunc', dst='tests/any_integrate9')
+
+
+seed = 9
+
+
+Step: 0, Loss: 0.20104366540908813, Computation time: 60.61560320854187
+Step: 100, Loss: 0.03623746708035469, Computation time: 0.12704730033874512
+Step: 199, Loss: 0.015426525846123695, Computation time: 0.12428116798400879
+Step: 0, Loss: 0.13697843253612518, Computation time: 62.9748637676239
+Step: 100, Loss: 0.06667253375053406, Computation time: 0.2222309112548828
+Step: 199, Loss: 0.06763271242380142, Computation time: 0.2210242748260498

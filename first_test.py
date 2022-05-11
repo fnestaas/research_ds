@@ -1,3 +1,4 @@
+from logging import warning
 import time
 from chex import ArrayTree
 
@@ -46,6 +47,7 @@ parser.add_argument('USE_AUTODIFF', )
 parser.add_argument('SKEW_PDE')
 parser.add_argument('INTEGRATE')
 parser.add_argument('FINAL_ACTIVATION')
+parser.add_argument('SEED')
 parser.add_argument('dst', type=str)
 
 args = parser.parse_args()
@@ -59,14 +61,15 @@ USE_AUTODIFF = args.USE_AUTODIFF == 'True'
 SKEW_PDE = args.SKEW_PDE == 'True'
 INTEGRATE = args.INTEGRATE == 'True'
 FINAL_ACTIVATION = args.FINAL_ACTIVATION
+SEED = int(args.SEED)
 dst = args.dst
+
+if not os.path.exists(dst):
+    os.makedirs(dst)
 
 print('I got these args:', args)
 
-assert PLOT == False
-
-if not USE_AUTODIFF:
-    print('debug grads is false')
+print(f'\n\nseed = {SEED}\n\n')
 
 def make_np(arr_list):
     try:
@@ -150,9 +153,13 @@ def main(
             final_activation = jnn.swish
         elif FINAL_ACTIVATION =='sigmoid':
             final_activation = jnn.sigmoid
+        elif FINAL_ACTIVATION == 'abs':
+            final_activation = lambda x: jnn.relu(x) + jnn.relu(-x)
+            import warnings
+            warnings.warn('ONLY final activation, not others!')
         else:
             raise NotImplementedError
-        func = PDEFunc(d=2, width_size=2, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation)
+        func = PDEFunc(d=2, width_size=2, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation, seed=seed)
         cat_dim = 0
     else:
         raise NotImplementedError
@@ -268,13 +275,11 @@ ts, ys, model, grad_tracker = main(
     lr_strategy=(3e-3, 1e-3),
     plot=PLOT, 
     dataset_size=100,
+    seed=SEED,
 )
 
 def save_jnp(to_save, handle):
     pickle.dump(make_np(to_save), handle)
-
-if not os.path.exists(dst):
-    os.makedirs(dst)
 
 # Save the model parameters
 with open(dst + '/last_state.pkl', 'wb') as handle:
