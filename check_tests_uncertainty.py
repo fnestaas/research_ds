@@ -5,18 +5,20 @@ import numpy as np
 
 fig, axs = plt.subplots(1, 3, figsize=(18, 6))
 
-folder1 = 'any_integrate' # 'skew_no_integral' # 
-folder2 = 'skew_integrate'
+folder1 = 'skew_integrate' # 'any_integrate' # 'skew_no_integral' # 
+folder2 = 'PWConstFunc' # 'skew_integrate' #
 folders = [folder1, folder2]
 norms = [None, None]
+
+n_seeds = 10
 
 res = {folder1: None, folder2: None}
 samples = {folder1: [], folder2: []}
 
 # compute adjoint norm and variance
 for folder in folders:
-    mean_var = np.zeros((10, 400))
-    for seed in range(10):
+    mean_var = np.zeros((n_seeds, 400))
+    for seed in range(n_seeds):
         norm = joblib.load(f'tests/{folder}{seed}/adjoint_norm.pkl')
         n_epochs = len(norm)
         # take the mean over the batches

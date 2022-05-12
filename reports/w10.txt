@@ -1,0 +1,12 @@
+Notes Week 10
+
+This week:
+held presentation; got valuable feedback
+- look at batch norm
+- show for bigger examples
+To do this, I should make sure the ODEs are easy to learn (see Duvenaud paper)
+Otherwise, maybe just implement this as a ResNet? 
+I could also analyze other architectures from the view of NODEs (there are papers that translate architectures)
+
+Next week:
+

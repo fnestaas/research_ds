@@ -37,39 +37,21 @@ import argparse
 # PLOT = True
 # USE_AUTODIFF = True # uses actual gradients but also allows for checking manual gradient computation
 
-parser = argparse.ArgumentParser('Run first test')
-parser.add_argument('TRACK_STATS', )
-parser.add_argument('WHICH_FUNC', type=str)
-parser.add_argument('DO_BACKWARD', )
-parser.add_argument('REGULARIZE', )
-parser.add_argument('PLOT', )
-parser.add_argument('USE_AUTODIFF', )
-parser.add_argument('SKEW_PDE')
-parser.add_argument('INTEGRATE')
-parser.add_argument('FINAL_ACTIVATION')
-parser.add_argument('SEED')
-parser.add_argument('dst', type=str)
 
-args = parser.parse_args()
-
-TRACK_STATS = args.TRACK_STATS == 'True'
-WHICH_FUNC = args.WHICH_FUNC
-DO_BACKWARD = args.DO_BACKWARD == 'True'
-REGULARIZE = args.REGULARIZE == 'True'
-PLOT = args.PLOT == 'True'
-USE_AUTODIFF = args.USE_AUTODIFF == 'True'
-SKEW_PDE = args.SKEW_PDE == 'True'
-INTEGRATE = args.INTEGRATE == 'True'
-FINAL_ACTIVATION = args.FINAL_ACTIVATION
-SEED = int(args.SEED)
-dst = args.dst
+TRACK_STATS = True
+WHICH_FUNC = 'PDEFunc'
+DO_BACKWARD = True
+REGULARIZE = False
+PLOT = True
+USE_AUTODIFF = True
+SKEW_PDE = True
+INTEGRATE = False
+FINAL_ACTIVATION = 'identity'
+SEED = 0
+dst = 'tests/just_a_test'
 
 if not os.path.exists(dst):
     os.makedirs(dst)
-
-print('I got these args:', args)
-
-print(f'\n\nseed = {SEED}\n\n')
 
 def make_np(arr_list):
     try:
@@ -159,14 +141,16 @@ def main(
             warnings.warn('ONLY final activation, not others!')
         else:
             raise NotImplementedError
-        func = PDEFunc(d=2, width_size=2, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation, seed=seed)
+        width_size = 20
+        func = PDEFunc(d=2, width_size=width_size, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation, seed=seed)
         cat_dim = 0
     elif WHICH_FUNC == 'RegularFunc':
         func = RegularFunc(d=2, width_size=2, depth=2, seed=seed)
         cat_dim = 0
 
     elif WHICH_FUNC == 'PWConstFunc':
-        func = PWConstFunc(d=2, width_size=2, depth=2, seed=seed)
+        width_size = 4
+        func = PWConstFunc(d=2, width_size=width_size, depth=2, seed=seed)
         cat_dim = 0
     else:
         raise NotImplementedError
@@ -198,6 +182,7 @@ def main(
             y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], TRACK_STATS and not USE_AUTODIFF)
 
             dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[:, -1, :] # end state of the adjoint
+            dldt = grads.get_params()
             if not USE_AUTODIFF:
                 end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
                 joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)

@@ -97,8 +97,9 @@ class BackwardPasser(eqx.Module):
         """
         if isinstance(self.func, ODE2ODEFunc):
             term = self.full_term_func
-        elif isinstance(self.func, PDEFunc):
+        else:
             term = self.full_term_pdefunc
+
         saveat = diffrax.SaveAt(ts=ts[::-1]) # diffrax doesn't work otherwise
         solution = diffrax.diffeqsolve(
             diffrax.ODETerm(term),
@@ -125,8 +126,10 @@ class NeuralODE(eqx.Module):
     d: int
     backwardpasser: BackwardPasser
     keep_grads: Boolean
+    rtol: float 
+    atol: float
 
-    def __init__(self, func, to_track=['num_steps', 'state_norm', 'grad_init'], keep_grads=True, **kwargs):
+    def __init__(self, func, to_track=['num_steps', 'state_norm', 'grad_init'], keep_grads=True, rtol=1e-3, atol=1e-6, **kwargs):
         super().__init__(**kwargs)
         # f = DynX() # function that specifies \dot{x} = f(Wx)
         # self.func = Func(b, f, **kwargs) # function that specifies the complete system dynamics
@@ -136,15 +139,17 @@ class NeuralODE(eqx.Module):
         self.d = self.func.d
         self.backwardpasser = BackwardPasser(self.func, **kwargs)
         self.keep_grads = keep_grads
+        self.rtol = rtol
+        self.atol = atol
         
     def solve(self, ts, y0):
         """
         Compute solution at times ts with initial state y0
         """
-        if self.keep_grads:
-            adj = diffrax.RecursiveCheckpointAdjoint()
-        else:
-            adj = diffrax.NoAdjoint()
+        # if self.keep_grads:
+        #     adj = diffrax.RecursiveCheckpointAdjoint()
+        # else:
+        #     adj = diffrax.NoAdjoint()
         solution = diffrax.diffeqsolve(
             diffrax.ODETerm(self.func),
             diffrax.Tsit5(),
@@ -152,9 +157,10 @@ class NeuralODE(eqx.Module):
             t1=ts[-1],
             dt0=ts[1] - ts[0],
             y0=y0,
-            stepsize_controller=diffrax.PIDController(),
+            stepsize_controller=diffrax.PIDController(rtol=self.rtol, atol=self.atol),
             saveat=diffrax.SaveAt(ts=ts),
-            adjoint=adj, 
+            # adjoint=diffrax.BacksolveAdjoint(), 
+            # max_steps=None
         )
         return solution
 
