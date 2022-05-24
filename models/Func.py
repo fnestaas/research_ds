@@ -94,6 +94,7 @@ class PDEFunc(Func):
     N: int # number of integration steps
     skew: bool # whether to predict using a skew-symmetric matrix
     integrate: bool # whether to predict by integrating
+    # efficient: bool
 
     # TODO: check that the norm of the adjoint remains constant
     # TODO: try out a system where we add Bx + f0 to the solution, where B = anti-symmetric, learnable, f0 learnable const
@@ -107,11 +108,15 @@ class PDEFunc(Func):
         key = jrandom.PRNGKey(seed)
         k1, k2 = jrandom.split(key, 2)
         in_size = d
-        self.init_nn = MLPWithParams(in_size, out_size=in_size, width_size=width_size, depth=depth, key=k1)        
-        # grad_out = int((d - 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d, d)
+        self.init_nn = MLPWithParams(in_size, out_size=in_size, width_size=width_size, depth=depth, key=k1)   
+        # if efficient:   
+        #     assert skew, 'will not choose triangular matrix unless we do not use skew-symmetric matrices'  
+        #     grad_out = int((d - 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d, d)
+        # else:
         grad_out = d ** 2
         self.grad_nn = MLPWithParams(in_size, grad_out, width_size, depth, key=k2, final_activation=final_activation) # predicts gradient of f
 
+        # self.efficient = efficient
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
         self.N = N
         self.skew = skew
@@ -131,20 +136,33 @@ class PDEFunc(Func):
         return integral + self.pred_init()
 
     def integrand(self, x, s):
-        if self.skew:
-            out = self.pred_skew(x, s)
-        else:
-            d = self.d
-            out = jnp.reshape(self.grad_nn(s*x), (d, d))
+        out = self.pred_mat(x, s)
         return out @ x
 
-    def pred_skew(self, x, s):
+    def pred_mat(self, x, s):
         d = self.d
         out = self.grad_nn(s*x) # \nabla f(s*x)
-        out = jnp.concatenate([out, jnp.zeros(d*d - out.shape[0])]) # make conformable to (d, d)-matrix
+        # if self.efficient:
+            # out = jnp.tril(out, -1)
+            # res = jnp.zeros((d, d))
+            # k = 0
+            # for i in range(d-1):
+            #     for j in range(i+1, d):
+            #         res[i, j] = res.at[i, j].set(out.at[k])
+            #         k = k + 1
+            # out = out.at[jnp.triu_indices(n=d, k=1)].set(out)
+        # else:
+            # out = jnp.concatenate([out, jnp.zeros(d*d - out.shape[0])]) # make conformable to (d, d)-matrix
         out = jnp.reshape(out, (d, d))
-        out = out - jnp.transpose(out) 
+        if self.skew:
+            out = out - jnp.transpose(out) 
+            out = out / jnp.sqrt(2)
         return out
+
+    def pred_skew(self, x, s):
+        assert self.skew
+        return self.pred_mat(x, s)
+        
 
     def pred_init(self):
         return self.init_nn(jnp.zeros((self.d, ))).reshape((self.d, ))

@@ -21,27 +21,31 @@ class NeuralODEClassifier(eqx.Module):
         out_size: int, 
         key, 
         activation: Callable=jnn.softmax, 
-        to_track: List=['num_steps', 'state_norm', 'grad_init'], 
+        to_track: List=['num_steps', 'state_norm', ], 
         rtol=1e-3, 
         atol=1e-6, 
         use_out=False, 
+        input_layer=None, 
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
         self.func = func
         self.node = NeuralODE(func, to_track=to_track, rtol=rtol, atol=atol)
-        self.input_layer = LinearWithParams(in_size, func.d, key=key)
+        if input_layer is not None:
+            self.input_layer = input_layer
+        else:
+            self.input_layer = LinearWithParams(in_size, func.d, key=key)
         self.output_layer = LinearWithParams(func.d, out_size, key=key)
         self.activation = activation
-        self.n_params = self.input_layer.n_params + self.node.n_params + self.output_layer.n_params * int(use_out)
+        self.n_params = self.node.n_params # only care about this
         self.use_out = use_out
 
-    def backward(self, ti, yi, loss_func, labels, N=100, lam=1e0):
+    def backward(self, ti, yi, loss_func, labels, N=100):
         new_t = jnp.linspace(ti[0], ti[-1], N)
         node_out = vmap(self.pred_partial, in_axes=(None, 0, None))(ti, yi, False)
 
         end_adjoint = vmap(
-            grad(lambda y: loss_func(labels, self.pred_rest(ti, y), self, lam=lam)), 
+            grad(lambda y: loss_func(labels, self.pred_rest(ti, y), self)), 
             in_axes=0
         )(node_out) # zero? 
 
@@ -69,15 +73,7 @@ class NeuralODEClassifier(eqx.Module):
         return self.activation(x)
 
     def get_params(self):
-        if self.use_out:
-            return jnp.concatenate([self.input_layer.get_params(), self.node.get_params(), self.output_layer.get_params()])
-        else:
-            return jnp.concatenate([self.input_layer.get_params(), self.node.get_params()])
+        return self.node.get_params()# ignore others
 
     def set_params(self, params):
-        n1 = self.input_layer.n_params
-        n2 = self.node.n_params + n1
-        self.input_layer.set_params(params[:n1])
-        self.node.set_params(params[n1:n2])
-        if self.use_out:
-            self.output_layer.set_params(params[n2:])
+        self.node.set_params(params)

@@ -2,6 +2,9 @@ from cmath import nan
 import matplotlib.pyplot as plt 
 import joblib 
 import numpy as np 
+import models.NeuralODEClassifier as node
+import jax.random as jrandom
+import jax.numpy as jnp
 
 # folders = [ 
 #     'PDEFuncidentity_skew', 
@@ -11,21 +14,44 @@ import numpy as np
 # ]
 
 folders = [
-    'mnist_run_skew',
+    # 'new_mnist_run_skew0',
+    # 'new_mnist_run_any0',
+    # 'new_mnist_run_regfunc0',
+    'just_a_test',
+    'skew_integrate0',
+    # 'cifar10_run_skew',
+    # 'cifar10_run_none',
+    # 'mnist_run_skew0',
+    # 'mnist_run_any0',
+    # 'mnist_run_regfunc0',
+    # 'mnist_run_skew'
+    # 'PDEFuncswish_skew',
     # 'mnist_run_none'
 ]
 
 fig, axs = plt.subplots(2, 3, figsize=(10, 15))
 y_max = 0
 
+# Check some model statistics (not all weights are 0...)
+# model_key = jrandom.PRNGKey(0)
+# d = 5
+# func = node.PDEFunc(d=d, width_size=d, depth=2, integrate=False, skew=True) 
+# model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, rtol=1e-2, atol=1e1, use_out=True)
+
 for i, folder in enumerate(folders):
-    adjoints = joblib.load('tests/' + folder + '/adjoint_norm.pkl')
+    if folder[-2] == 'c':
+        lib = 'test/'
+        
+    else:
+        lib = 'tests/'
+    adjoints = joblib.load(lib + folder + '/adjoint_norm.pkl')
+    
     label=folder
     if len(adjoints) > 0:
         mean_var = [np.nanmean(np.quantile(adjoint, q=.79, axis=-1)/np.quantile(adjoint, q=.21, axis=-1)) for adjoint in adjoints]
         nan_mask = np.isnan(np.array([np.quantile(adjoint, q=.79, axis=-1)/np.quantile(adjoint, q=.21, axis=-1) for adjoint in adjoints]))
         num_nans = np.sum(nan_mask)
-        print(f'got {num_nans/np.size(nan_mask)} nans\n')
+        print(f'got {num_nans/np.size(nan_mask)*100}% nans\n')
         # mean_var = [np.mean(np.var(adjoint, axis=-1)) for adjoint in adjoints]
         epochs = np.arange(len(adjoints))
         y_max = max([y_max, 1.1*max(mean_var)])
@@ -34,7 +60,7 @@ for i, folder in enumerate(folders):
             mean_var, 
             label=label
         )
-        sample = int(.75*len(adjoints))
+        sample = int(len(adjoints)) - 1
         sample_adjoint = adjoints[sample][0, :]
         axs[0, 1].plot(
             np.arange(len(sample_adjoint)), 
@@ -42,7 +68,11 @@ for i, folder in enumerate(folders):
             label=label
         )
 
-        nfes = joblib.load('tests/' + folder + '/num_steps.pkl')
+        # axs[0, 2].plot(
+
+        # )
+
+        nfes = joblib.load(lib + folder + '/num_steps.pkl')
         mean_nfe = [np.mean(nfe) for nfe in nfes]
         epochs = np.arange(len(mean_nfe))
         axs[1, 0].plot( 
@@ -51,7 +81,7 @@ for i, folder in enumerate(folders):
             label=folder 
         )
 
-        state_norm = joblib.load('tests/' + folder + '/state_norm.pkl')
+        state_norm = joblib.load(lib + folder + '/state_norm.pkl')
         mean_state_norm_var = [np.mean(np.var(adjoint, axis=-1)) for adjoint in state_norm]
         axs[1, 1].plot( 
             epochs, 

@@ -12,6 +12,7 @@ import jax.numpy as jnp
 from jax import vmap, grad
 
 from models import NeuralODEClassifier as node
+from models.Func import Func
 from models.NeuralODE import StatTracker
 
 import equinox as eqx
@@ -20,14 +21,31 @@ import jax.random as jrandom
 import time
 import pickle
 import os
+import argparse
+
+parser = argparse.ArgumentParser('Run MNIST test')
+parser.add_argument('FUNC', ) # RegularFunc or whatever else
+parser.add_argument('SKEW', type=str)
+parser.add_argument('SEED', type=str)
+parser.add_argument('dst')
+
+args = parser.parse_args()
+
+FUNC = args.FUNC
+SEED = int(args.SEED)
+SKEW = args.SKEW == 'True' # This was wrong when I ran the tests...
+dst = args.dst
+print(f'\nrunning with args {args}\n')
+
+# FUNC = 'PDEFunc'
+# SEED = 0
+# SKEW = True 
+# dst = 'tests/just_a_test'
 
 TRACK_STATS = True 
 DO_BACKWARD = True
-SKEW = True 
-skew = 'skew' if SKEW else 'none'
-dst = f'tests/mnist_run_{skew}'
 
-batch_size = 256
+batch_size = 128
 n_targets = 10
 
 def one_hot(x, k, dtype=jnp.float32):
@@ -63,43 +81,50 @@ class NumpyLoader(data.DataLoader):
 
 class FlattenAndCast(object):
   def __call__(self, pic):
-    return np.ravel(np.array(pic, dtype=jnp.float32))
+    pic = np.ravel(np.array(pic, dtype=jnp.float32))
+    pic = (pic - .1307)/.3081 # standardize
+    return pic
 
 mnist_dataset = MNIST('/tmp/mnist/', download=True, transform=FlattenAndCast())
 training_generator = NumpyLoader(mnist_dataset, batch_size=batch_size, num_workers=0)
 
-train_images = np.array(mnist_dataset.train_data).reshape(len(mnist_dataset.train_data), -1)
-train_labels = one_hot(np.array(mnist_dataset.train_labels), n_targets)
+train_images = np.array(mnist_dataset.data).reshape(len(mnist_dataset.data), -1)
+train_labels = one_hot(np.array(mnist_dataset.targets), n_targets)
 
 # Get full test dataset
 mnist_dataset_test = MNIST('/tmp/mnist/', download=True, train=False)
-test_images = jnp.array(mnist_dataset_test.test_data.numpy().reshape(len(mnist_dataset_test.test_data), -1), dtype=jnp.float32)
-test_labels = one_hot(np.array(mnist_dataset_test.test_labels), n_targets)
+test_images = jnp.array(mnist_dataset_test.data.numpy().reshape(len(mnist_dataset_test.data), -1), dtype=jnp.float32)
+test_labels = one_hot(np.array(mnist_dataset_test.targets), n_targets)
 
 def main(
-    lr_strategy=(3e-3, 3e-3),
-    steps_strategy=(200, 200),
-    length_strategy=(1, 1),
-    seed=5678,
-    print_every=100,
+    lr=1e-3, 
+    n_epochs=1,
+    steps_per_epoch=200,
+    seed=SEED,
+    print_every=10,
 ):
     key = jrandom.PRNGKey(seed)
-    data_key, model_key, loader_key = jrandom.split(key, 3)
+    _, model_key, l = jrandom.split(key, 3)
 
-    # ts, ys = get_data(dataset_size, key=data_key) 
-    # _, length_size, data_size = ys.shape
+    d = 40
+    depth = 4
+    width_size = d
+    if FUNC != 'RegularFunc':
+        func = node.PDEFunc(d=d, width_size=width_size, depth=depth, integrate=False, skew=SKEW, seed=seed) # number of steps taken to solve is very important. Use more advanced method?
+        model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True)
+        params = model.get_params()
 
-    d = 10
-
-    func = node.PDEFunc(d=d, width_size=d, depth=2, integrate=False, skew=SKEW) # number of steps taken to solve is very important. Use more advanced method?
-    model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, rtol=1e-2, atol=1e1)
-    params = model.get_params()
-    model.set_params(params * 1e-3 / jnp.max(jnp.abs(params))) # try to make the ODE less stiff at initialization
+        # try to make the ODE less stiff at initialization
+        # Further motivation is actually that the expected magnitude of the derivatives seem to be much bigger 
+        # for functions of the form f0 + A(x) x. 
+        model.set_params(params * 1e-3 / jnp.max(jnp.abs(params)))
+    else:
+        func = node.RegularFunc(d=d, width_size=width_size, depth=depth, seed=seed,)
+        model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True)
 
     grad_tracker = StatTracker(['adjoint_norm'])
 
-    # Training loop where we train on only length_strategy[i] in the ith iteration
-    # This avoids getting stuck in a local minimum
+    validation_acc = []
 
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi, labels):
@@ -131,18 +156,24 @@ def main(
         ce = vmap(_celoss, in_axes=(-1, -1))(y, y_pred) 
         return jnp.mean(ce) # + lam * jnp.mean(jnp.square(model.get_params()))
 
-    for lr, steps, length in zip(lr_strategy, steps_strategy, length_strategy):
+    for epoch in range(n_epochs):
         optim = optax.adabelief(lr)
         opt_state = optim.init(eqx.filter(model, eqx.is_inexact_array))
+        length = 1
+        steps = steps_per_epoch
+        print(f'\nepoch {epoch+1}/{n_epochs}')
         for step, (yi, labels) in zip( 
             range(steps), training_generator 
         ):
-            _ts = jnp.array([0., length])
+            # _ts = jnp.array([0., length])
+            _ts = jnp.linspace(0., length, 10)
             start = time.time()
             loss, model, opt_state = make_step(_ts, yi, model, opt_state, labels)
             end = time.time()
             if (step % print_every) == 0 or step == steps - 1:
                 print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
+                # nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
+                # print(f'mean nfe: {nfe}')
                 preds = vmap(model, in_axes=(None, 0, None))(_ts, yi, False)
                 preds = jnp.argmax(preds, axis=-1)
                 acc = jnp.mean(labels == preds)
@@ -152,9 +183,10 @@ def main(
                 preds = jnp.argmax(preds, axis=-1)
                 acc = jnp.mean(jnp.argmax(test_labels, axis=-1) == preds)
                 print(f'Test accuracy: {acc}') 
-    return model, grad_tracker
+                validation_acc.append(acc)
+    return model, grad_tracker, validation_acc
 
-model, grad_tracker = main()
+model, grad_tracker, validation_acc = main()
 
 def make_np(arr_list):
     try:
@@ -173,6 +205,9 @@ def save_jnp(to_save, handle):
     pickle.dump(make_np(to_save), handle)
 
 # Save the model parameters
+with open(dst + '/acc.pkl', 'wb') as handle:
+    save_jnp(validation_acc, handle)
+
 with open(dst + '/last_state.pkl', 'wb') as handle:
     save_jnp(model.get_params(), handle)
 
@@ -186,9 +221,9 @@ if TRACK_STATS:
         to_save = model.get_stats()['state_norm']
         save_jnp(to_save, handle)
 
-    with open(dst + '/grad_init.pkl', 'wb') as handle:
-        to_save = model.get_stats()['grad_init']
-        save_jnp(to_save, handle)
+    # with open(dst + '/grad_init.pkl', 'wb') as handle:
+    #     to_save = model.get_stats()['grad_init']
+    #     save_jnp(to_save, handle)
 
     with open( dst + '/adjoint_norm.pkl', 'wb') as handle:
         to_save = grad_tracker.attributes['adjoint_norm']

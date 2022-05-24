@@ -150,12 +150,16 @@ class NeuralODE(eqx.Module):
         #     adj = diffrax.RecursiveCheckpointAdjoint()
         # else:
         #     adj = diffrax.NoAdjoint()
+        if len(ts)>1:
+            dt0 = ts[1] - ts[0] if len(ts) > 2 else (ts[-1] - ts[0]) / 100 # make sure initial stepsize is not too small
+        else:
+            dt0 = ts[-1] / 100
         solution = diffrax.diffeqsolve(
             diffrax.ODETerm(self.func),
             diffrax.Tsit5(),
             t0=ts[0],
             t1=ts[-1],
-            dt0=ts[1] - ts[0],
+            dt0=dt0, 
             y0=y0,
             stepsize_controller=diffrax.PIDController(rtol=self.rtol, atol=self.atol),
             saveat=diffrax.SaveAt(ts=ts),

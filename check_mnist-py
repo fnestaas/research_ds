@@ -15,11 +15,9 @@ n_seeds = 10
 res = {folder1: None, folder2: None}
 samples = {folder1: [], folder2: []}
 
-n_times = 4*200
-
 # compute adjoint norm and variance
 for folder in folders:
-    mean_var = np.zeros((n_seeds, n_times))
+    mean_var = np.zeros((n_seeds, 400))
     for seed in range(n_seeds):
         norm = joblib.load(f'tests/{folder}{seed}/adjoint_norm.pkl')
         n_epochs = len(norm)

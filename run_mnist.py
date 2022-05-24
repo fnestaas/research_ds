@@ -2,38 +2,36 @@ import os
 import subprocess
 
 def main():
-    plot = False 
-    track_stats = True 
-    do_backward = True
-    regularize = False 
-    integrate = True
-    skew_pde = True
-    final_activation = 'identity'
-    which_func = 'PWConstFunc'
-    use_autodiff = True
+    """
+    NB NB NB NB
 
-    for skew_pde in [False]: # integrate, but vary whether we use skew sym; already computed what happens if we have skew and integrate
-        if skew_pde: sk = 'skew'
-        else: sk = 'any'
-        integrate = True
-        it = '_integrate'
-        for seed in range(9, 10):
-            dst = f'tests/{which_func}{seed}'
-            subprocess.run([
+    When I ran these tests earlier, I had a bug in the code, so the results for skew=False are actually as if I had used skew=True...
+    """
+    n_seeds = 10
+
+    for skew in [True, False]:
+        sk = 'skew' if skew else 'any'
+        for seed in range(n_seeds): 
+            subprocess.run([ 
                 'python', 
-                'first_test.py', 
-                str(track_stats), 
-                which_func, 
-                str(do_backward), 
-                str(regularize), 
-                str(plot), 
-                str(use_autodiff), 
-                str(skew_pde),
-                str(integrate), 
-                final_activation,
-                str(seed),
-                dst
+                'mnist_test.py',
+                'NonRegularFunc',
+                str(skew), 
+                str(seed), 
+                f'tests/new_mnist_run_{sk}{seed}'
             ])
+    
+    skew = True 
+    for seed in range(n_seeds):
+        skew = True
+        subprocess.run([ 
+            'python', 
+            'mnist_test.py',
+            'RegularFunc',
+            str(skew), 
+            str(seed), 
+            f'test/new_mnist_run_regfunc{seed}'
+        ])
     
 if __name__ == '__main__':
     main()

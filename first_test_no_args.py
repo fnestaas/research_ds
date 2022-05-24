@@ -39,7 +39,7 @@ import argparse
 
 
 TRACK_STATS = True
-WHICH_FUNC = 'PDEFunc'
+WHICH_FUNC = 'RegularFunc' # 'PDEFunc'
 DO_BACKWARD = True
 REGULARIZE = False
 PLOT = True
