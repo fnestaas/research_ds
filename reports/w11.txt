@@ -10,8 +10,8 @@ Saw that there are distributional differences when predicting matrices and predi
 Checked Frobenius norms of derivatives
 
 Next week:
-think about distributions, initialization schemes
-Idea: learn how to initialize these networks.
+think about distributions, initialization schemes. Use flax?
+Idea: learn how to initialize these networks. 
 
 Write report
 
