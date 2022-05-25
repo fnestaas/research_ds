@@ -1,0 +1,17 @@
+What I did this week
+
+Read paper on neural CDE, but did not implement it. Wanted to ask about feasibility since we would be doing another matrix-vector mutliplication
+(f_\theta @ dX/ds)
+
+Found out that MNIST is not a good test, results essentially rely on linear layer
+
+Saw that there are distributional differences when predicting matrices and predicting the output directly
+
+Checked Frobenius norms of derivatives
+
+Next week:
+think about distributions, initialization schemes
+Idea: learn how to initialize these networks.
+
+Write report
+
