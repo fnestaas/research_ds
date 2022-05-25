@@ -11,7 +11,7 @@ def main():
 
     for skew in [True, False]:
         sk = 'skew' if skew else 'any'
-        for seed in range(n_seeds): 
+        for seed in range(0, 100*n_seeds, 100): 
             subprocess.run([ 
                 'python', 
                 'mnist_test.py',

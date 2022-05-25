@@ -37,15 +37,10 @@ SKEW = args.SKEW == 'True' # This was wrong when I ran the tests...
 dst = args.dst
 print(f'\nrunning with args {args}\n')
 
-# FUNC = 'PDEFunc'
-# SEED = 0
-# SKEW = True 
-# dst = 'tests/just_a_test'
-
 TRACK_STATS = True 
-DO_BACKWARD = True
+DO_BACKWARD = False
 
-batch_size = 128
+batch_size = 64 # 256
 n_targets = 10
 
 def one_hot(x, k, dtype=jnp.float32):
@@ -98,7 +93,7 @@ test_labels = one_hot(np.array(mnist_dataset_test.targets), n_targets)
 
 def main(
     lr=1e-3, 
-    n_epochs=1,
+    n_epochs=4,
     steps_per_epoch=200,
     seed=SEED,
     print_every=10,
@@ -106,21 +101,25 @@ def main(
     key = jrandom.PRNGKey(seed)
     _, model_key, l = jrandom.split(key, 3)
 
-    d = 40
-    depth = 4
+    d = 20
+    depth = 5
     width_size = d
     if FUNC != 'RegularFunc':
         func = node.PDEFunc(d=d, width_size=width_size, depth=depth, integrate=False, skew=SKEW, seed=seed) # number of steps taken to solve is very important. Use more advanced method?
-        model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True)
-        params = model.get_params()
-
-        # try to make the ODE less stiff at initialization
-        # Further motivation is actually that the expected magnitude of the derivatives seem to be much bigger 
-        # for functions of the form f0 + A(x) x. 
-        model.set_params(params * 1e-3 / jnp.max(jnp.abs(params)))
     else:
         func = node.RegularFunc(d=d, width_size=width_size, depth=depth, seed=seed,)
-        model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True)
+        # model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True)
+    model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True, to_track=['num_steps'])
+    params = model.get_params()
+
+    # try to make the ODE less stiff at initialization
+    # Further motivation is actually that the expected magnitude of the derivatives seem to be much bigger 
+    # for functions of the form f0 + A(x) x. 
+    n1 = model.input_layer.n_params
+    # new_params = jnp.concatenate([params[:n1]*1e-1, jnp.zeros((len(params) - n1))])
+    # new_params = jnp.concatenate([params[:n1]*0, params[n1:]*1e-2])
+    new_params = params * 1e-3 # further investigation shows that actually the linear layer is most important...
+    model.set_params(new_params/ jnp.max(jnp.abs(params)))
 
     grad_tracker = StatTracker(['adjoint_norm'])
 
@@ -137,8 +136,6 @@ def main(
         updates, opt_state = optim.update(grads, opt_state) 
 
         if DO_BACKWARD: 
-            # to_grad = lambda y: _loss_func(one_hot(labels, 10), y, model, lam=1e0)
-            # pass loss func, in NODEClf, compute grad(lambda y: _loss_func(labels, self.out_layer(y), self, lam=1e0))
             backward_pass = model.backward(ti, yi, _loss_func, one_hot(labels, 10))
             n_adj = backward_pass.ys.shape[-1] // 2
             adjoint = backward_pass.ys[:, :, :n_adj]
@@ -158,22 +155,30 @@ def main(
 
     for epoch in range(n_epochs):
         optim = optax.adabelief(lr)
+        # optim = optax.adam(lr)
         opt_state = optim.init(eqx.filter(model, eqx.is_inexact_array))
-        length = 1
         steps = steps_per_epoch
         print(f'\nepoch {epoch+1}/{n_epochs}')
         for step, (yi, labels) in zip( 
             range(steps), training_generator 
         ):
+            #length = .5 + .5*int(epoch > 1)
+            length = 1
             # _ts = jnp.array([0., length])
-            _ts = jnp.linspace(0., length, 10)
+            _ts = jnp.linspace(0., length, 100)
             start = time.time()
             loss, model, opt_state = make_step(_ts, yi, model, opt_state, labels)
             end = time.time()
             if (step % print_every) == 0 or step == steps - 1:
                 print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
-                # nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
-                # print(f'mean nfe: {nfe}')
+                nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
+                print(f'mean nfe: {nfe}')
+                params = model.get_params()
+                n1 = model.input_layer.n_params
+                n2 = model.output_layer.n_params
+                print(f'mean value of params for input layer: {jnp.mean(jnp.abs(params[:n1]))}')
+                params = params[n1:-n2]
+                print(f'mean value of params for node: {jnp.mean(jnp.abs(params))}')
                 preds = vmap(model, in_axes=(None, 0, None))(_ts, yi, False)
                 preds = jnp.argmax(preds, axis=-1)
                 acc = jnp.mean(labels == preds)

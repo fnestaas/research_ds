@@ -14,11 +14,10 @@ import jax.numpy as jnp
 # ]
 
 folders = [
-    # 'new_mnist_run_skew0',
-    # 'new_mnist_run_any0',
-    # 'new_mnist_run_regfunc0',
-    'just_a_test',
-    'skew_integrate0',
+    'new_initialization{SKEW_PDE}',
+    'new_initializationTrue',
+    # 'just_a_test',
+    # 'skew_integrate0',
     # 'cifar10_run_skew',
     # 'cifar10_run_none',
     # 'mnist_run_skew0',
@@ -31,6 +30,9 @@ folders = [
 
 fig, axs = plt.subplots(2, 3, figsize=(10, 15))
 y_max = 0
+
+lower_q = .21
+upper_q = 1-lower_q
 
 # Check some model statistics (not all weights are 0...)
 # model_key = jrandom.PRNGKey(0)
@@ -48,10 +50,10 @@ for i, folder in enumerate(folders):
     
     label=folder
     if len(adjoints) > 0:
-        mean_var = [np.nanmean(np.quantile(adjoint, q=.79, axis=-1)/np.quantile(adjoint, q=.21, axis=-1)) for adjoint in adjoints]
-        nan_mask = np.isnan(np.array([np.quantile(adjoint, q=.79, axis=-1)/np.quantile(adjoint, q=.21, axis=-1) for adjoint in adjoints]))
-        num_nans = np.sum(nan_mask)
-        print(f'got {num_nans/np.size(nan_mask)*100}% nans\n')
+        mean_var = [np.nanmean(np.quantile(adjoint, q=upper_q, axis=-1)/np.quantile(adjoint, q=lower_q, axis=-1)) for adjoint in adjoints]
+        # nan_mask = np.isnan(np.array([np.quantile(adjoint, q=.79, axis=-1)/np.quantile(adjoint, q=.21, axis=-1) for adjoint in adjoints]))
+        # num_nans = np.sum(nan_mask)
+        # print(f'got {num_nans/np.size(nan_mask)*100}% nans\n')
         # mean_var = [np.mean(np.var(adjoint, axis=-1)) for adjoint in adjoints]
         epochs = np.arange(len(adjoints))
         y_max = max([y_max, 1.1*max(mean_var)])
@@ -61,7 +63,10 @@ for i, folder in enumerate(folders):
             label=label
         )
         sample = int(len(adjoints)) - 1
-        sample_adjoint = adjoints[sample][0, :]
+        try:
+            sample_adjoint = adjoints[sample][0, :]
+        except:
+            sample_adjoint = adjoints[sample]
         axs[0, 1].plot(
             np.arange(len(sample_adjoint)), 
             sample_adjoint,

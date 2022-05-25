@@ -131,8 +131,6 @@ class NeuralODE(eqx.Module):
 
     def __init__(self, func, to_track=['num_steps', 'state_norm', 'grad_init'], keep_grads=True, rtol=1e-3, atol=1e-6, **kwargs):
         super().__init__(**kwargs)
-        # f = DynX() # function that specifies \dot{x} = f(Wx)
-        # self.func = Func(b, f, **kwargs) # function that specifies the complete system dynamics
         self.func = func
         self.stats = StatTracker(to_track)
         self.n_params = self.func.n_params
@@ -152,6 +150,7 @@ class NeuralODE(eqx.Module):
         #     adj = diffrax.NoAdjoint()
         if len(ts)>1:
             dt0 = ts[1] - ts[0] if len(ts) > 2 else (ts[-1] - ts[0]) / 100 # make sure initial stepsize is not too small
+            # dt0 = ts[1] - ts[0]
         else:
             dt0 = ts[-1] / 100
         solution = diffrax.diffeqsolve(

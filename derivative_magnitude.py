@@ -17,6 +17,8 @@ import pickle
 
 CHECK_BOTH = True 
 CHECK_B = False
+TAKE_LOG = True
+N_runs = 1
 
 def frobenius(A):
     return jnp.sum(jnp.square(A))
@@ -36,10 +38,13 @@ def get_mat(f, x):
     """
     return f.pred_mat(x, 1)
 
-def get_sym_frob(func, x, eps=1e-6):
+def get_sym_frob(func, x, eps=1e-6, log=False):
     diff = get_diff(func, x)
     sd = 1/2 * (diff + jnp.transpose(diff))
-    return frobenius(sd) / (frobenius(diff) + eps)/ func.d**2
+    if log:
+        return jnp.log(frobenius(sd) + eps) - 2*jnp.log(func.d) - jnp.log(frobenius(diff - sd) + eps)
+    else:
+        return frobenius(sd) / func.d**2 / (frobenius(diff - sd)) 
 
 def mean_ratio(func, x):
     B = get_mat(func, x)
@@ -52,7 +57,6 @@ depths = [5, 10, 20, 30, 50] # the deeper the more asymmetric, but also slower. 
 grid_skew = np.zeros((len(ds), len(depths)))
 grid_any = np.zeros((len(ds), len(depths)))
 grid_reg = np.zeros((len(ds), len(depths)))
-N_runs = 10
 
 if CHECK_BOTH:
     # check difference between skew and non-skew
@@ -64,10 +68,10 @@ if CHECK_BOTH:
                 x = jrandom.normal(key=key, shape=(d, ))
                 for skew in [True, False]:
                     func = PDEFunc(d=d, seed=seed, width_size=d, depth=depth, skew=skew, integrate=False)
-                    rs[skew].append(get_sym_frob(func, x))
+                    rs[skew].append(get_sym_frob(func, x, log=TAKE_LOG))
                     del func
                 func = RegularFunc(d=d, seed=seed, width_size=d, depth=depth)
-                rs['reg'].append(get_sym_frob(func, x))
+                rs['reg'].append(get_sym_frob(func, x, log=TAKE_LOG))
                 del func
                 
             rs[True] = jnp.mean(jnp.array(rs[True]))
@@ -77,7 +81,7 @@ if CHECK_BOTH:
             grid_any[i, j] = rs[False] 
             grid_reg[i, j] = rs['reg']
     
-n_plots = 5
+n_plots = 6
 fig, axs = plt.subplots(1, n_plots, subplot_kw={"projection": "3d"})
 poss = [None]*n_plots
 ds, depths = np.meshgrid(ds, depths)
@@ -85,12 +89,14 @@ poss[0] = axs[0].plot_surface(ds, depths, grid_skew, cmap=cm.coolwarm)
 axs[0].set_title('skew symmetric')
 poss[1] = axs[1].plot_surface(ds, depths, grid_any, cmap=cm.coolwarm)
 axs[1].set_title('any matrix')
-poss[2] = axs[2].plot_surface(ds, depths, grid_skew/grid_any, cmap=cm.coolwarm)
+poss[2] = axs[2].plot_surface(ds, depths, grid_skew/grid_any if not TAKE_LOG else grid_skew - grid_any, cmap=cm.coolwarm)
 axs[2].set_title('ratio skew / any')
 poss[3] = axs[3].plot_surface(ds, depths, grid_reg, cmap=cm.coolwarm)
 axs[3].set_title('RegularFunc')
-poss[4] = axs[4].plot_surface(ds, depths, grid_skew/grid_reg, cmap=cm.coolwarm)
+poss[4] = axs[4].plot_surface(ds, depths, grid_skew/grid_reg if not TAKE_LOG else grid_skew - grid_reg, cmap=cm.coolwarm)
 axs[4].set_title('ratio skew / RegularFunc')
+poss[5] = axs[5].plot_surface(ds, depths, grid_any/grid_reg if not TAKE_LOG else grid_any - grid_reg, cmap=cm.coolwarm)
+axs[5].set_title('ratio any / RegularFunc')
 
 for ax, pos in zip(axs, poss):
     ax.set_xlabel('depth')

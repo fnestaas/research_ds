@@ -39,16 +39,17 @@ import argparse
 
 
 TRACK_STATS = True
-WHICH_FUNC = 'RegularFunc' # 'PDEFunc'
+WHICH_FUNC = 'PDEFunc' # 'RegularFunc' # 
 DO_BACKWARD = True
 REGULARIZE = False
-PLOT = True
+PLOT = False
 USE_AUTODIFF = True
 SKEW_PDE = True
+ADD_DIM = SKEW_PDE # add a cheaty dimension, helps especially in skew-symmetric case
 INTEGRATE = False
 FINAL_ACTIVATION = 'identity'
 SEED = 0
-dst = 'tests/just_a_test'
+dst = f'tests/new_initialization{SKEW_PDE}'
 
 if not os.path.exists(dst):
     os.makedirs(dst)
@@ -107,7 +108,7 @@ def dataloader(arrays, batch_size, *, key, cat_dim=2):
             end = start + batch_size
 
 def main(
-    dataset_size=256,
+    dataset_size=512,
     batch_size=32,
     lr_strategy=(3e-3, 3e-3),
     steps_strategy=(500, 500),
@@ -127,7 +128,6 @@ def main(
         f = DynX()
         func = ODE2ODEFunc(b, f)
         cat_dim = 2
-    
     elif WHICH_FUNC == 'PDEFunc':
         if FINAL_ACTIVATION == 'identity':
             final_activation = _identity
@@ -142,14 +142,15 @@ def main(
         else:
             raise NotImplementedError
         width_size = 20
-        func = PDEFunc(d=2, width_size=width_size, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation, seed=seed)
-        cat_dim = 0
+        cat_dim = int(ADD_DIM)
+        func = PDEFunc(d=2 + cat_dim, width_size=width_size, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation, seed=seed)
     elif WHICH_FUNC == 'RegularFunc':
-        func = RegularFunc(d=2, width_size=2, depth=2, seed=seed)
+        width_size = 20
+        func = RegularFunc(d=2, width_size=width_size, depth=2, seed=seed)
         cat_dim = 0
 
     elif WHICH_FUNC == 'PWConstFunc':
-        width_size = 4
+        width_size = 20
         func = PWConstFunc(d=2, width_size=width_size, depth=2, seed=seed)
         cat_dim = 0
     else:
@@ -178,46 +179,49 @@ def main(
             loss, grads = grad_loss(model, ti, yi)
             updates, opt_state = optim.update(grads, opt_state)
         if DO_BACKWARD: 
-            # compute gradients "manually"
-            y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], TRACK_STATS and not USE_AUTODIFF)
+            try:
+                # compute gradients "manually"
+                y_pred = jax.vmap(model, in_axes=(None, 0, None))(ti, yi[:, 0, :], TRACK_STATS and not USE_AUTODIFF)
 
-            dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[:, -1, :] # end state of the adjoint
-            dldt = grads.get_params()
-            if not USE_AUTODIFF:
-                end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
-                joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
-            else:
-                joint_end_state = jnp.concatenate([dLdT, y_pred[:, -1, :]], axis=-1)
-            
-            backward_pass = jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state)
-
-            n_adj = dLdT.shape[-1]
-            adjoint = backward_pass.ys[:, :, :n_adj]
-
-            adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
-            adjoint_errors = jnp.max(adjoint_norm, axis=-1) / jnp.min(adjoint_norm, axis=-1)
-            
-            if not USE_AUTODIFF:
-                computed_grads = -backward_pass.ys[:, :, n_adj:-n_adj]
-                cp_grads = jnp.sum(jnp.trapz(computed_grads, axis=1, dx=ts[1]-ts[0]), axis=0)
-                scale = 8 # TODO: Why exactly?
-                estimated_grad = scale * cp_grads
-
-                # create a gradient to use optim
-                if isinstance(model.func, PDEFunc):
-                    fc = PDEFunc(model.func.d, model.func.init_nn.width_size, model.func.init_nn.depth)
+                dLdT = jax.grad(lambda y: _loss_func(yi, y))(y_pred)[:, -1, :] # end state of the adjoint
+                if not USE_AUTODIFF:
+                    end_state_loss = jnp.zeros((dLdT.shape[0], model.n_params, ))
+                    joint_end_state = jnp.concatenate([dLdT, end_state_loss, y_pred[:, -1, :]], axis=-1)
                 else:
-                    b = GatedODE(model.func.b.d, model.func.b.width, depth=model.func.b.depth)
-                    f = DynX()
-                    fc = ODE2ODEFunc(b, f)
-                grads = NeuralODE(fc)
-                grads.set_params(estimated_grad)
-                grads = eqx.filter(grads, eqx.is_array)
-                updates, opt_state = optim.update(grads, opt_state)
+                    joint_end_state = jnp.concatenate([dLdT, y_pred[:, -1, :]], axis=-1)
                 
-            loss = _loss_func(yi, y_pred)
-            if TRACK_STATS:
-                grad_tracker.update({'adjoint_norm': adjoint_norm})
+                backward_pass = jax.vmap(model.backward, in_axes=(None, 0))(ti, joint_end_state)
+
+                n_adj = dLdT.shape[-1]
+                adjoint = backward_pass.ys[:, :, :n_adj]
+
+                adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
+                adjoint_errors = jnp.max(adjoint_norm, axis=-1) / jnp.min(adjoint_norm, axis=-1)
+                
+                if not USE_AUTODIFF:
+                    computed_grads = -backward_pass.ys[:, :, n_adj:-n_adj]
+                    cp_grads = jnp.sum(jnp.trapz(computed_grads, axis=1, dx=ts[1]-ts[0]), axis=0)
+                    scale = 8 # TODO: Why exactly?
+                    estimated_grad = scale * cp_grads
+
+                    # create a gradient to use optim
+                    if isinstance(model.func, PDEFunc):
+                        fc = PDEFunc(model.func.d, model.func.init_nn.width_size, model.func.init_nn.depth)
+                    else:
+                        b = GatedODE(model.func.b.d, model.func.b.width, depth=model.func.b.depth)
+                        f = DynX()
+                        fc = ODE2ODEFunc(b, f)
+                    grads = NeuralODE(fc)
+                    grads.set_params(estimated_grad)
+                    grads = eqx.filter(grads, eqx.is_array)
+                    updates, opt_state = optim.update(grads, opt_state)
+                    
+                    loss = _loss_func(yi, y_pred)
+                if TRACK_STATS:
+                    grad_tracker.update({'adjoint_norm': adjoint_norm})
+            except:
+                if TRACK_STATS:
+                    grad_tracker.update({'adjoint_norm': jnp.zeros((len(ti), ))})
 
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
@@ -247,8 +251,8 @@ def main(
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        # model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.eye(1).reshape((-1, ))]))
-        model_y = model(ts, ys[0, 0])
+        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.eye(int(ADD_DIM)).reshape((-1, ))]))
+        # model_y = model(ts, ys[0, 0])
         plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
         plt.plot(ts, model_y[:, 1], c="crimson")
         plt.legend()

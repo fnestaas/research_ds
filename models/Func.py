@@ -109,13 +109,13 @@ class PDEFunc(Func):
         k1, k2 = jrandom.split(key, 2)
         in_size = d
         self.init_nn = MLPWithParams(in_size, out_size=in_size, width_size=width_size, depth=depth, key=k1)   
-        # if efficient:   
-        #     assert skew, 'will not choose triangular matrix unless we do not use skew-symmetric matrices'  
-        #     grad_out = int((d - 1) * d / 2) # number of parameters for skew-symmetric matrix of shape (d, d)
-        # else:
         grad_out = d ** 2
         self.grad_nn = MLPWithParams(in_size, grad_out, width_size, depth, key=k2, final_activation=final_activation) # predicts gradient of f
-
+        # we need to be careful when initializing the grad_nn for the distribution of the output to be the same as
+        # if we had not done matrix multiplication. Below, we make take care of this
+        params = self.grad_nn.get_params() 
+        k = grad_out * (width_size + 1) # the parameters which are in the last layer (+1 for bias)
+        self.grad_nn.set_params(jnp.concatenate([params[:-k], params[-k:] / jnp.sqrt(d)]))
         # self.efficient = efficient
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
         self.N = N
