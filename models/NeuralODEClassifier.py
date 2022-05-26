@@ -65,8 +65,8 @@ class NeuralODEClassifier(eqx.Module):
 
     def pred_partial(self, ts, x, update=False):
         x = self.input_layer(x)
-        # return self.node(ts, x, update=update)[-1, :]
-        return jnp.mean(self.node(ts, x, update=update)[::2, :], axis=0)
+        return self.node(ts, x, update=update)[-1, :]
+        # return jnp.mean(self.node(ts, x, update=update)[::2, :], axis=0)
     
     def pred_rest(self, ts, x):
         if self.use_out:

@@ -38,14 +38,14 @@ import argparse
 # USE_AUTODIFF = True # uses actual gradients but also allows for checking manual gradient computation
 
 
-TRACK_STATS = True
+TRACK_STATS = False
 WHICH_FUNC = 'PDEFunc' # 'RegularFunc' # 
-DO_BACKWARD = True
+DO_BACKWARD = False
 REGULARIZE = False
-PLOT = False
+PLOT = True
 USE_AUTODIFF = True
 SKEW_PDE = True
-ADD_DIM = SKEW_PDE # add a cheaty dimension, helps especially in skew-symmetric case
+ADD_DIM = 10 # int(SKEW_PDE) # add a cheaty dimension, helps especially in skew-symmetric case
 INTEGRATE = False
 FINAL_ACTIVATION = 'identity'
 SEED = 0
@@ -92,7 +92,7 @@ def dataloader(arrays, batch_size, *, key, cat_dim=2):
     indices = jnp.arange(dataset_size)
     # we concatenate some orthogonal matrix to the state, as we use one dynamical system
     # to describe how the weights and state evolves
-    cat = jnp.reshape(jnp.concatenate([jnp.eye(cat_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, cat_dim**2))
+    cat = jnp.reshape(jnp.concatenate([jnp.ones(cat_dim)]*batch_size*n_timestamps), newshape=(batch_size, n_timestamps, cat_dim))
     while True:
         perm = jrandom.permutation(key, indices)
         (key,) = jrandom.split(key, 1)
@@ -142,8 +142,8 @@ def main(
         else:
             raise NotImplementedError
         width_size = 20
-        cat_dim = int(ADD_DIM)
-        func = PDEFunc(d=2 + cat_dim, width_size=width_size, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation, seed=seed)
+        cat_dim = ADD_DIM
+        func = PDEFunc(d=2+cat_dim, width_size=width_size, depth=2, skew=SKEW_PDE, integrate=INTEGRATE, final_activation=final_activation, seed=seed)
     elif WHICH_FUNC == 'RegularFunc':
         width_size = 20
         func = RegularFunc(d=2, width_size=width_size, depth=2, seed=seed)
@@ -251,7 +251,7 @@ def main(
     if plot:
         plt.plot(ts, ys[0, :, 0], c="dodgerblue", label="Real")
         plt.plot(ts, ys[0, :, 1], c="dodgerblue")
-        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.eye(int(ADD_DIM)).reshape((-1, ))]))
+        model_y = model(ts, jnp.concatenate([ys[0, 0], jnp.ones(ADD_DIM, )]))
         # model_y = model(ts, ys[0, 0])
         plt.plot(ts, model_y[:, 0], c="crimson", label="Model")
         plt.plot(ts, model_y[:, 1], c="crimson")

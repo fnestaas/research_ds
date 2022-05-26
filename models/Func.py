@@ -115,7 +115,7 @@ class PDEFunc(Func):
         # if we had not done matrix multiplication. Below, we make take care of this
         params = self.grad_nn.get_params() 
         k = grad_out * (width_size + 1) # the parameters which are in the last layer (+1 for bias)
-        self.grad_nn.set_params(jnp.concatenate([params[:-k], params[-k:] / jnp.sqrt(d)]))
+        self.grad_nn.set_params(jnp.concatenate([params[:-k], params[-k:] / jnp.sqrt(d - int(skew))]))
         # self.efficient = efficient
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
         self.N = N

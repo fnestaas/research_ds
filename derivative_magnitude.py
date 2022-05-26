@@ -7,7 +7,6 @@ How does the Frobenius norm of these matrices compare?
 
 import jax.numpy as jnp
 import numpy as np
-from torch import frobenius_norm, norm
 from models.Func import PDEFunc, RegularFunc # check only the func derivative
 from jax import jacfwd 
 import jax.random as jrandom
@@ -18,6 +17,8 @@ import pickle
 CHECK_BOTH = True 
 CHECK_B = False
 TAKE_LOG = True
+TAKE_RATIO = False
+SYM = False
 N_runs = 1
 
 def frobenius(A):
@@ -38,13 +39,16 @@ def get_mat(f, x):
     """
     return f.pred_mat(x, 1)
 
-def get_sym_frob(func, x, eps=1e-6, log=False):
+def get_sym_frob(func, x, eps=1e-6, log=False, sym=SYM):
     diff = get_diff(func, x)
-    sd = 1/2 * (diff + jnp.transpose(diff))
-    if log:
-        return jnp.log(frobenius(sd) + eps) - 2*jnp.log(func.d) - jnp.log(frobenius(diff - sd) + eps)
+    if SYM:
+        sd = 1/2 * (diff + jnp.transpose(diff))
     else:
-        return frobenius(sd) / func.d**2 / (frobenius(diff - sd)) 
+        sd = 1/2 * (diff - jnp.transpose(diff))
+    if log:
+        return jnp.log(frobenius(sd) + eps) - 2*jnp.log(func.d) - jnp.log(frobenius(diff - sd) + eps) * int(TAKE_RATIO)
+    else:
+        return frobenius(sd) / func.d**2 / (frobenius(diff - sd) if TAKE_RATIO else 1) 
 
 def mean_ratio(func, x):
     B = get_mat(func, x)

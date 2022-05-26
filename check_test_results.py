@@ -14,8 +14,11 @@ import jax.numpy as jnp
 # ]
 
 folders = [
-    'new_initialization{SKEW_PDE}',
-    'new_initializationTrue',
+    #'new_initialization{SKEW_PDE}',
+    #'new_initializationTrue',
+    "pollution_FUNC='PDEFunc'_SKEW=False0",
+    "pollution_FUNC='PDEFunc'_SKEW=True0",
+    "pollution_FUNC='RegularFunc'_SKEW=False0",
     # 'just_a_test',
     # 'skew_integrate0',
     # 'cifar10_run_skew',
@@ -72,10 +75,13 @@ for i, folder in enumerate(folders):
             sample_adjoint,
             label=label
         )
-
-        # axs[0, 2].plot(
-
-        # )
+        acc = joblib.load(lib + folder + '/acc.pkl')
+        to_plot = [jnp.mean(ac) for ac in acc]
+        axs[0, 2].plot(
+            jnp.arange(len(to_plot)), 
+            to_plot, 
+            label=label
+        )
 
         nfes = joblib.load(lib + folder + '/num_steps.pkl')
         mean_nfe = [np.mean(nfe) for nfe in nfes]
@@ -103,17 +109,19 @@ for i, folder in enumerate(folders):
 
 axs[0, 0].legend()
 axs[0, 1].legend()
+axs[0, 2].legend()
 axs[1, 0].legend()
 axs[1, 1].legend()
 axs[1, 2].legend()
 
 axs[0, 0].set_title('adjoint norm score')
 axs[0, 1].set_title('sample adjoint norm')
+axs[0, 2].set_title('validation loss')
 axs[1, 0].set_title('number of function evaluations')
 axs[1, 1].set_title('variance of state norm')
 axs[1, 2].set_title('sample state norm')
 
-fig.tight_layout()
+# fig.tight_layout()
 
 plt.show()
 
