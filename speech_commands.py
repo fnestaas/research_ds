@@ -1,18 +1,14 @@
-# This file is taken from
-# https://jax.readthedocs.io/en/latest/notebooks/Neural_Network_and_Data_Loading.html
-
-# TODO: other datasets here: http://proceedings.mlr.press/v80/helfrich18a/helfrich18a.pdf
-# https://github.com/ajithcodesit/lstm_copy_task/blob/master/LSTM_copy_task.py 
-
-from turtle import backward
+from torchaudio.datasets import SPEECHCOMMANDS
 import numpy as np
 from torch.utils import data
 from torchvision.datasets import MNIST
 import jax.numpy as jnp
 from jax import vmap, grad
+import pandas as pd
+import jax.nn as jnn
 
 from models import NeuralODEClassifier as node
-from models.Func import Func
+from models.NeuralCDE import CDEPDEFunc, CDERegularFunc, NeuralCDE
 from models.NeuralODE import StatTracker
 
 import equinox as eqx
@@ -23,24 +19,38 @@ import pickle
 import os
 import argparse
 
-parser = argparse.ArgumentParser('Run MNIST test')
-parser.add_argument('FUNC', ) # RegularFunc or whatever else
-parser.add_argument('SKEW', type=str)
-parser.add_argument('SEED', type=str)
-parser.add_argument('dst')
+import torch
 
-args = parser.parse_args()
+# parser = argparse.ArgumentParser('Run MNIST test')
+# parser.add_argument('FUNC', ) # RegularFunc or whatever else
+# parser.add_argument('SKEW', type=str)
+# parser.add_argument('SEED', type=str)
+# parser.add_argument('dst')
 
-FUNC = args.FUNC
-SEED = int(args.SEED)
-SKEW = args.SKEW == 'True' # This was wrong when I ran the tests...
-dst = args.dst
-print(f'\nrunning with args {args}\n')
+# args = parser.parse_args()
+
+# FUNC = args.FUNC
+# SEED = int(args.SEED)
+# SKEW = args.SKEW == 'True' # This was wrong when I ran the tests...
+# dst = args.dst
+# print(f'\nrunning with args {args}\n')
+
+FUNC = 'RegularFunc'
+SKEW = False
+SEED = 0
+dst = f'tests/speech_{FUNC=}_{SKEW=}{SEED}'
+
+print(dst)
+
+LABEL = 'CO'
+
+np.random.seed(SEED)
+torch.manual_seed(SEED)
 
 TRACK_STATS = True 
 DO_BACKWARD = False
 
-batch_size = 64 # 256
+batch_size = 32
 n_targets = 10
 
 def one_hot(x, k, dtype=jnp.float32):
@@ -80,16 +90,26 @@ class FlattenAndCast(object):
     pic = (pic - .1307)/.3081 # standardize
     return pic
 
-mnist_dataset = MNIST('/tmp/mnist/', download=True, transform=FlattenAndCast())
+# download 
+if not os.path.exists('/tmp/SpeechCommands/'):
+    os.makedirs('/tmp/SpeechCommands/')
+
+mnist_dataset = SPEECHCOMMANDS(
+    '/tmp/SpeechCommands/', 
+    download=True, 
+    # transform=FlattenAndCast(), 
+    subset='training'
+    )
 training_generator = NumpyLoader(mnist_dataset, batch_size=batch_size, num_workers=0)
 
-train_images = np.array(mnist_dataset.data).reshape(len(mnist_dataset.data), -1)
-train_labels = one_hot(np.array(mnist_dataset.targets), n_targets)
-
 # Get full test dataset
-mnist_dataset_test = MNIST('/tmp/mnist/', download=True, train=False)
-test_images = jnp.array(mnist_dataset_test.data.numpy().reshape(len(mnist_dataset_test.data), -1), dtype=jnp.float32)
-test_labels = one_hot(np.array(mnist_dataset_test.targets), n_targets)
+mnist_dataset_test = SPEECHCOMMANDS(
+    '/tmp/SpeechCommands/', 
+    download=True, 
+    # transform=FlattenAndCast(), 
+    subset='validation'
+    )
+
 
 def main(
     lr=1e-3, 
@@ -101,34 +121,31 @@ def main(
     key = jrandom.PRNGKey(seed)
     _, model_key, l = jrandom.split(key, 3)
 
-    d = 40
-    depth = 5
-    width_size = d
-    if FUNC != 'RegularFunc':
-        func = node.PDEFunc(d=d, width_size=width_size, depth=depth, integrate=False, skew=SKEW, seed=seed) # number of steps taken to solve is very important. Use more advanced method?
-    else:
-        func = node.RegularFunc(d=d, width_size=width_size, depth=depth, seed=seed,)
+    d = 10
+    hidden_size = 10
+    depth = 4
+    width_size = 32
+    if FUNC == 'PDEFunc':
+        # func = node.PDEFunc(d=d, width_size=width_size, depth=depth, integrate=False, skew=SKEW, seed=seed) # number of steps taken to solve is very important. Use more advanced method?
+        func = CDEPDEFunc(d=d, hidden_size=hidden_size, depth=depth, width_size=width_size, seed=seed)
+    elif FUNC == 'RegularFunc':
+        # func = node.RegularFunc(d=d, width_size=width_size, depth=depth, seed=seed,)
+        func = CDERegularFunc(d=d, hidden_size=hidden_size, depth=depth, width_size=width_size, seed=seed, final_activation=jnn.tanh)
         # model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True)
-    model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True, to_track=['num_steps'])
-    params = model.get_params()
-
-    # try to make the ODE less stiff at initialization
-    # Further motivation is actually that the expected magnitude of the derivatives seem to be much bigger 
-    # for functions of the form f0 + A(x) x. 
-    # n1 = model.input_layer.n_params
-    # new_params = jnp.concatenate([params[:n1]*1e-1, jnp.zeros((len(params) - n1))])
-    # new_params = jnp.concatenate([params[:n1]*0, params[n1:]*1e-2])
-    # new_params = params * 1e-3 # further investigation shows that actually the linear layer is most important...
-    # model.set_params(new_params/ jnp.max(jnp.abs(params)))
-
+    else:
+        raise NotImplementedError
+    # model = node.NeuralODEClassifier(func, in_size=16000, out_size=1, key=model_key, use_out=True, activation=lambda x: x)
+    model = NeuralCDE(d, width_size, depth, hidden_size, func, key=model_key)
     grad_tracker = StatTracker(['adjoint_norm'])
 
-    validation_acc = []
+    validation_loss = []
+
+    assert False, 'inputs should be spline coefficients, now they are not!'
 
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi, labels):
         y_pred = vmap(model, in_axes=(None, 0, None))(ti, yi, TRACK_STATS)
-        return _loss_func(one_hot(labels, 10), y_pred, model, lam=1e0)
+        return _loss_func(labels, y_pred, model, lam=1e0)
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state, labels):
@@ -136,7 +153,7 @@ def main(
         updates, opt_state = optim.update(grads, opt_state) 
 
         if DO_BACKWARD: 
-            backward_pass = model.backward(ti, yi, _loss_func, one_hot(labels, 10))
+            backward_pass = model.backward(ti, yi, _loss_func, labels)
             n_adj = backward_pass.ys.shape[-1] // 2
             adjoint = backward_pass.ys[:, :, :n_adj]
             adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
@@ -146,12 +163,9 @@ def main(
         model = eqx.apply_updates(model, updates)
         return loss, model, opt_state
 
-    def _celoss(y, y_pred):
-        return -jnp.sum(y*jnp.log(y_pred + .001))
-
     def _loss_func(y, y_pred, model, lam=1e0):
-        ce = vmap(_celoss, in_axes=(-1, -1))(y, y_pred) 
-        return jnp.mean(ce) # + lam * jnp.mean(jnp.square(model.get_params()))
+        loss = jnp.square(y - y_pred.reshape((-1, ))) 
+        return jnp.mean(loss) # + lam * jnp.mean(jnp.square(model.get_params()))
 
     for epoch in range(n_epochs):
         optim = optax.adabelief(lr)
@@ -159,9 +173,11 @@ def main(
         opt_state = optim.init(eqx.filter(model, eqx.is_inexact_array))
         steps = steps_per_epoch
         print(f'\nepoch {epoch+1}/{n_epochs}')
-        for step, (yi, labels) in zip( 
+        for step, item in zip( 
             range(steps), training_generator 
         ):
+            yi = np.concatenate([i.numpy() for i in item[0]])
+            labels = item[4]
             #length = .5 + .5*int(epoch > 1)
             length = 1
             # _ts = jnp.array([0., length])
@@ -171,27 +187,21 @@ def main(
             end = time.time()
             if (step % print_every) == 0 or step == steps - 1:
                 print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
-                # nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
-                # print(f'mean nfe: {nfe}')
-                # params = model.get_params()
-                # n1 = model.input_layer.n_params
-                # n2 = model.output_layer.n_params
-                # print(f'mean value of params for input layer: {jnp.mean(jnp.abs(params[:n1]))}')
-                # params = params[n1:-n2]
-                # print(f'mean value of params for node: {jnp.mean(jnp.abs(params))}')
-                preds = vmap(model, in_axes=(None, 0, None))(_ts, yi, False)
-                preds = jnp.argmax(preds, axis=-1)
-                acc = jnp.mean(labels == preds)
-                print(f'Train accuracy: {acc}')
+                nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
+                print(f'mean nfe: {nfe}')
+                
+                for step_, item in zip( 
+                    range(1), training_generator 
+                ):
+                    test_input = np.concatenate([i.numpy() for i in item[0]])
+                    test_output = item[4]
+                    preds = vmap(model, in_axes=(None, 0, None))(_ts, test_input, False)
+                    acc = _loss_func(test_output, preds, model)
+                    print(f'Test loss: {acc}') 
+                    validation_loss.append(acc)
+    return model, grad_tracker, validation_loss
 
-                preds = vmap(model, in_axes=(None, 0, None))(_ts, test_images, False)
-                preds = jnp.argmax(preds, axis=-1)
-                acc = jnp.mean(jnp.argmax(test_labels, axis=-1) == preds)
-                print(f'Test accuracy: {acc}') 
-                validation_acc.append(acc)
-    return model, grad_tracker, validation_acc
-
-model, grad_tracker, validation_acc = main()
+model, grad_tracker, validation_loss = main()
 
 def make_np(arr_list):
     try:
@@ -211,7 +221,7 @@ def save_jnp(to_save, handle):
 
 # Save the model parameters
 with open(dst + '/acc.pkl', 'wb') as handle:
-    save_jnp(validation_acc, handle)
+    save_jnp(validation_loss, handle)
 
 with open(dst + '/last_state.pkl', 'wb') as handle:
     save_jnp(model.get_params(), handle)

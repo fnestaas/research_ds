@@ -1,0 +1,11 @@
+Notes week 12
+
+What I did this week
+Implemented own test on 15 dim example, can match performance of RegularFunc
+Experimented with NeuralCDE but I think it would require quite a bit of work and be very slow
+Worked on the report
+
+Observed that Kidger was not careful about initializing NNs for matrices in his NeuralCDE - potential improvement?
+He also uses tanh at the end which might ensure that the ODEs are not too stiff
+
+

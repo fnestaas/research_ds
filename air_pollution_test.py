@@ -19,26 +19,26 @@ import argparse
 
 import torch
 
-# parser = argparse.ArgumentParser('Run MNIST test')
-# parser.add_argument('FUNC', ) # RegularFunc or whatever else
-# parser.add_argument('SKEW', type=str)
-# parser.add_argument('SEED', type=str)
-# parser.add_argument('dst')
+parser = argparse.ArgumentParser('Run MNIST test')
+parser.add_argument('FUNC', ) # RegularFunc or whatever else
+parser.add_argument('SKEW', type=str)
+parser.add_argument('SEED', type=str)
+parser.add_argument('dst')
 
-# args = parser.parse_args()
+args = parser.parse_args()
 
-# FUNC = args.FUNC
-# SEED = int(args.SEED)
-# SKEW = args.SKEW == 'True' # This was wrong when I ran the tests...
-# dst = args.dst
-# print(f'\nrunning with args {args}\n')
+FUNC = args.FUNC
+SEED = int(args.SEED)
+SKEW = args.SKEW == 'True'
+dst = args.dst
+print(f'\nrunning with args {args}\n')
 
-FUNC = 'RegularFunc'
-SKEW = False
-SEED = 0
-dst = f'tests/pollution_{FUNC=}_{SKEW=}{SEED}'
+# FUNC = 'PDEFunc'
+# SKEW = True
+# SEED = 0
+# dst = f'tests/pollution_{FUNC=}_{SKEW=}{SEED}'
 
-print(dst)
+# print(dst)
 
 LABEL = 'CO'
 
@@ -109,7 +109,7 @@ train_set = df[~msk]
 dataset_train = MyDataset(train_set, mean=means, std=stds, seed=SEED)
 training_generator = NumpyLoader(dataset_train, batch_size=batch_size, num_workers=0)
 dataset_test = MyDataset(test_set, mean=means, std=stds, seed=SEED)
-testing_generator = NumpyLoader(dataset_test, batch_size=batch_size, num_workers=0)
+testing_generator = NumpyLoader(dataset_test, batch_size=4*batch_size, num_workers=0)
 
 test_set_ = test_set.sample(frac=.01, random_state=SEED)
 test_input = test_set_.drop(columns=[LABEL]).to_numpy()
@@ -183,11 +183,11 @@ def main(
             end = time.time()
             if (step % print_every) == 0 or step == steps - 1:
                 print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
-                nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
-                print(f'mean nfe: {nfe}')
+                # nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
+                # print(f'mean nfe: {nfe}')
                 
                 for step_, (test_input, test_output) in zip( 
-                    range(1), training_generator 
+                    range(1), testing_generator 
                 ):
                     preds = vmap(model, in_axes=(None, 0, None))(_ts, test_input, False)
                     acc = _loss_func(test_output, preds, model)

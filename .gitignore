@@ -1,4 +1,5 @@
 *venv/
 *data/
+*archived_code/
 *.pkl
 *.pyc

@@ -2,7 +2,7 @@ import os
 import subprocess
 
 def main():
-    skew = True
+    skew = False
     seed = 5678
 
     sk = 'skew' if skew else 'any'
@@ -10,7 +10,7 @@ def main():
     subprocess.run([ 
         'python', 
         'mnist_test.py',
-        'NonRegularFunc',
+        'RegularFunc',
         str(skew), 
         str(seed), 
         f'tests/mnist_run_{sk}{seed}'

@@ -302,4 +302,3 @@ class SymmetricLoss():
             return self.full_penalty(ts, last_pred)
         else:
             return self.partial_penalty(ts, last_pred)
-        
