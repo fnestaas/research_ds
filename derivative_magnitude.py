@@ -17,7 +17,7 @@ import pickle
 CHECK_BOTH = True 
 CHECK_B = False
 TAKE_LOG = True
-TAKE_RATIO = False
+TAKE_RATIO = True
 SYM = False
 N_runs = 1
 

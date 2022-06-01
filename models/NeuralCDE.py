@@ -8,6 +8,8 @@ from models.NeuralODE import NeuralODE, StatTracker
 from models.nn_with_params import *
 from abc import abstractmethod
 from equinox.nn.composed import _identity
+import matplotlib
+matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 
 class CDEFunc(eqx.Module):
     d: int 
@@ -67,7 +69,8 @@ class CDEPDEFunc(CDEFunc):
                 [
                     params[:-k], 
                     # normalize since we multiply by a d-dimensional vector
-                    params[-k:] / jnp.sqrt(d)
+                    # Empirically, it looks like we should also normalize by the hidden size
+                    params[-k:] / jnp.sqrt(d*(hidden_size - int(skew)))
                 ]
             )
         )
@@ -78,33 +81,28 @@ class CDEPDEFunc(CDEFunc):
         self.integrate = integrate
 
     def __call__(self, ts, x, args):
-        # integrate
-        # z = jnp.concatenate([x, jnp.array([self.L])])
         z = x
         if self.integrate:
-            N = 10
+            N = 100
             s = jnp.linspace(0, 1, N+1)
             y = jax.vmap(self.integrand, in_axes=(None, 0))(z, s) # A(sx)x
             integral = jnp.trapz(y, x=s, dx=1/N, axis=0) 
         else:
-            integral = self.integrand(z, 1) 
-
+            tau = 1/2 # hyperparameter; how to approximate the integral best possible? Actually also good performance for small values (1/10 e.g.)
+            integral = self.integrand(z, tau) 
+        
         return integral + self.pred_init()
 
     def integrand(self, x, s):
         out = self.pred_mat(x, s) # (hidden_size, d, hidden_size)
-        # perm = jnp.transpose(out, (1, 2, 0)) # (hidden_size, d, hidden_size)
-        perm = out
-        res = jnp.matmul(perm, x) # (hidden_size, d)
+        res = jnp.matmul(out, x) # (hidden_size, d)
         return res
 
     def pred_mat(self, x, s):
         d = self.d
         out = self.grad_nn(s*x) # \nabla f(s*x)
-        # out = jnp.reshape(out, (self.hidden_size, self.hidden_size, d))
         out = jnp.reshape(out, (self.hidden_size, d, self.hidden_size))
         if self.skew:
-            # out = out - jnp.transpose(out, (1, 0, 2)) 
             out = out - jnp.transpose(out, (2, 1, 0))
             out = out / jnp.sqrt(2) # should still be okay
         return out # (hidden_size, d, hidden_size)
@@ -201,24 +199,31 @@ class NeuralCDE(NeuralODE):
         self.n_params = self.func.n_params + self.initial.n_params
         self.d = self.func.d
 
-    def cde_backward_term(self, t, joint_state, args):
-        n = self.func.d
+    def cde_backward_term(self, t, joint_state, args, cde_term):
+        n = self.func.hidden_size
         adjoint = joint_state[:n]
-        x = joint_state[-n:]
+        z = joint_state[-n:]
 
-        dfdz = jax.jacfwd(lambda z: self.func(t, z, args))
+        dfdz = jax.jacfwd(lambda x: cde_term.vf(t, x, args)) # evaluate the vector field vf
         
-        t1 = - adjoint @ dfdz(x)
-        t3 = self.func(t, x, args)
-        return jnp.concatenate([t1, t3])
+        t1 = - adjoint @ dfdz(z)
+        t2 = cde_term.vf(t, z, args)
+        return jnp.concatenate([t1, t2])
 
-    def backward(self, ts, coeffs):
+    def backward(self, ts, coeffs, loss_func, label):
         # coeffs = jax.vmap(diffrax.backward_hermite_coefficients)(ts, joint_end_state)
         control = diffrax.CubicInterpolation(ts, coeffs)
-        term = diffrax.ControlTerm(self.cde_backward_term, control).to_ode()
+        cde_term = diffrax.ControlTerm(self.func, control).to_ode() 
+        term = diffrax.ODETerm(lambda t, joint_state, args: self.cde_backward_term(t, joint_state, args, cde_term))
         solver = diffrax.Tsit5()
         dt0 = -(ts[-1] - ts[0]) # integrating backwards in time
-        y0 = self.initial(control.evaluate(ts[0]))
+
+        _, output = self.solve(ts, coeffs)
+
+        y_final = output.ys[-1, :]
+        adjoint_final = jax.grad(lambda z: loss_func(label, self.pred_final(z)))(y_final)
+
+        y0 = jnp.concatenate([adjoint_final, y_final])
         saveat = diffrax.SaveAt(ts=ts[::-1]) # diffrax doesn't work otherwise
         solution = diffrax.diffeqsolve(
             term,
@@ -234,12 +239,13 @@ class NeuralCDE(NeuralODE):
         )
         return solution
 
+    def pred_final(self, y):
+        return jnn.sigmoid(self.linear(y))
+
     def solve(self, ts, coeffs, evolving_out=False):
         # Each sample of data consists of some timestamps `ts`, and some `coeffs`
         # parameterising a control path. These are used to produce a continuous-time
         # input path `control`.
-        # assert y0.shape[-1] == self.d + 1, f'Bad shape {y0.shape}, NeuralCDE has {self.d=}. Did you forget time as a channel (0th dimension)?'
-        # coeffs = jax.vmap(diffrax.backward_hermite_coefficients)(ts, y0) # hermite coeffs have to be computed on ts and ys of the same length; one y per t
         control = diffrax.CubicInterpolation(ts, coeffs)
         term = diffrax.ControlTerm(self.func, control).to_ode()
         solver = diffrax.Tsit5()
@@ -261,9 +267,9 @@ class NeuralCDE(NeuralODE):
             max_steps=2**14,
         )
         if evolving_out:
-            prediction = jax.vmap(lambda y: jnn.sigmoid(self.linear(y))[0])(solution.ys)
+            prediction = jax.vmap(lambda y: self.pred_final(y)[0])(solution.ys)
         else:
-            (prediction,) = jnn.sigmoid(self.linear(solution.ys[-1]))
+            (prediction,) = self.pred_final(solution.ys[-1])
         return prediction, solution
 
     def __call__(self, ts, coeffs, evolving_out=False, update=True):
@@ -271,12 +277,6 @@ class NeuralCDE(NeuralODE):
         if update:
             self.stats.update(self.compute_stats(sol))
         return preds
-
-    # def track_mode(self):
-    #     self.update = True 
-    
-    # def eval_mode(self):
-    #     self.update = False
 
     def compute_stats(self, solution):
         """

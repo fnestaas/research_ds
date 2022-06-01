@@ -15,14 +15,14 @@ def fwd(x, seed, d, depth, name):
     elif name == 'CDERegularFunc': # TODO: d=1? We are taking the norm in the end
         return jnp.matmul(CDERegularFunc(d=d, hidden_size=d, width_size=d, depth=depth, seed=seed)(None, x, None), x)
     elif name == 'CDEPDEFunc':
-        return jnp.matmul(CDEPDEFunc(d=d, hidden_size=d, width_size=d, depth=depth, seed=seed, integrate=True)(None, x, None), x)
+        return jnp.matmul(CDEPDEFunc(d=d, hidden_size=d, width_size=d, depth=depth, seed=seed, integrate=False)(None, x, None), x)
     elif name == 'x':
         return x
     else:
         raise NotImplementedError
 
 verbose = True
-N_seeds = 3
+N_seeds = 30
 
 ds = [2, 10, 50, 100]
 depths = [2, 4, 10, 20]

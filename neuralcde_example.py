@@ -1,5 +1,4 @@
 import math
-from stringprep import in_table_c11
 import time
 
 import diffrax
@@ -62,7 +61,7 @@ def main(
     batch_size=32,
     lr=1e-3,
     steps=1000,
-    seed=34567,
+    seed=567,
     cat_dim=None
 ):
     key = jrandom.PRNGKey(seed)
@@ -73,7 +72,7 @@ def main(
     )
     cat_dim = 0 if cat_dim is None else cat_dim
     d = 3 + cat_dim # effectively what the model sees, dimension(y) + 1 because of time
-    width_size = 128
+    width_size = 64
     depth = 4
     hidden_size = 8
     final_activation = lambda x: x 
@@ -89,29 +88,47 @@ def main(
         func = CDEPDEFunc(d=d, hidden_size=hidden_size, width_size=width_size, depth=depth, seed=seed, skew=skew, final_activation=final_activation, integrate=integrate)
     
     model = NeuralCDE(d, width_size=width_size, depth=depth, hidden_size=hidden_size, key=model_key, func=func)
-    # model.set_params(model.get_params()*1e-3)
+    # model.set_params(model.get_params()*1e-6)
 
     # Training loop like normal.
 
-    # @eqx.filter_jit
-    def loss(model, ti, label_i, coeff_i):
-        eps = 1e-6 # avoid nans
-        # model.track_mode()
-        pred = jax.vmap(model)(ti, coeff_i)
-        # model.eval_mode()
-        # Binary cross-entropy
+    def loss_func(label_i, pred, eps=1e-6):
         bxe = label_i * jnp.log(pred + eps) + (1 - label_i) * jnp.log(1 - pred + eps)
         bxe = -jnp.mean(bxe)
+        return bxe
+
+    # @eqx.filter_jit
+    def loss(model, ti, label_i, coeff_i):
+        pred = jax.vmap(model)(ti, coeff_i)
+        # Binary cross-entropy
+        bxe = loss_func(label_i, pred)
         acc = jnp.mean((pred > 0.5) == (label_i == 1))
         return bxe, acc
 
     grad_loss = eqx.filter_value_and_grad(loss, has_aux=True)
+
+    def score_adjoint(adjoint, lower = .15):
+        upper = 1-lower
+        return jnp.quantile(adjoint, upper, axis=-1)/jnp.quantile(adjoint, lower, axis=-1)
 
     # @eqx.filter_jit
     def make_step(model, data_i, opt_state):
         ti, label_i, *coeff_i = data_i
         (bxe, acc), grads = grad_loss(model, ti, label_i, coeff_i)
         updates, opt_state = optim.update(grads, opt_state)
+
+        backward_pass = jax.vmap(
+            lambda t, coeff, label: model.backward(t, coeff, loss_func, label), 
+        )(ti, coeff_i, label_i)
+        adjoint_norm = jnp.linalg.norm(backward_pass.ys[:, :, :model.func.hidden_size], axis=-1)
+        # pred, sol = jax.vmap(model)(ti, coeff_i, evolving_out=True)
+        # error = sol.ys - backward_pass.ys[:, ::-1, model.func.hidden_size:]
+        print('mean adjoint norm', jnp.mean(adjoint_norm))
+        print('adjoint std', jnp.median(jnp.std(adjoint_norm, axis=-1)))
+        print('adjoint score', jnp.median(score_adjoint(adjoint_norm)))
+        # idx = jnp.argmax(jnp.std(adjoint_norm, axis=-1))
+        # plt.plot(adjoint_norm[idx, :])
+        # plt.show()
         model = eqx.apply_updates(model, updates)
         return bxe, acc, model, opt_state
 
@@ -127,16 +144,16 @@ def main(
             f"Step: {step}, Loss: {bxe}, Accuracy: {acc}, Computation time: "
             f"{end - start}"
         )
-        print(
-            'num_steps', jnp.max(model.stats.attributes['num_steps'][-1].val)
-        ) 
+        # print(
+        #     'num_steps', jnp.max(model.stats.attributes['num_steps'][-1].val)
+        # ) 
 
-        print(
-            'state norm', jnp.max(model.stats.attributes['state_norm'][-1].val.primal)
-        )
-        print(
-            'state norm std', jnp.std(model.stats.attributes['state_norm'][-1].val.primal) # not really relevant, we care about the adjoint
-        )
+        # print(
+        #     'state norm', jnp.max(model.stats.attributes['state_norm'][-1].val.primal)
+        # )
+        # print(
+        #     'state norm std', jnp.std(model.stats.attributes['state_norm'][-1].val.primal) # not really relevant, we care about the adjoint
+        # )
     ts, coeffs, labels, _ = get_data(dataset_size, add_noise, key=test_data_key)
     bxe, acc = loss(model, ts, labels, coeffs)
     print(f"Test loss: {bxe}, Test Accuracy: {acc}")

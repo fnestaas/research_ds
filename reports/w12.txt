@@ -9,3 +9,10 @@ Observed that Kidger was not careful about initializing NNs for matrices in his 
 He also uses tanh at the end which might ensure that the ODEs are not too stiff
 
 
+Next week:
+Report
+Run a few more tests to ensure that adjoint behavior is better consistently
+How does norm of $z$ change in NeuralCDE if $x$ is exploding/vanishing.
+
+
+
