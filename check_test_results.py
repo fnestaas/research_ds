@@ -7,8 +7,6 @@ import jax.random as jrandom
 import jax.numpy as jnp
 import matplotlib
 
-matplotlib.rcParams.update({'font.size': 22})
-
 # folders = [ 
 #     'PDEFuncidentity_skew', 
 #     'PDEFuncswish_skew',
@@ -17,21 +15,27 @@ matplotlib.rcParams.update({'font.size': 22})
 # ]
 
 folders = [
-    # "pollution_FUNC='PDEFunc'_SKEW=True0",
-    # "pollution_FUNC='RegularFunc'_SKEW=False0",
+    # 'pollution_PDEFunc_skew=True15',
+    # 'pollution_RegularFunc_skew=True15',
+    # 'pollution_PDEFunc_skew=False14',
+    # "pollution_FUNC='PDEFunc'_SKEW=False14",
     # 'pollution_RegularFunc_skew=True1',
     # 'pollution_PDEFunc_skew=False1',
     # 'pollution_PDEFunc_skew=True1',
     'pollution_RegularFunc_skew=True',
+    # 'pollution_PDEFunc_skew=False',
     'pollution_PDEFunc_skew=True',
+    # "cancer_FUNC='RegularFunc'_SKEW=True0"
 ]
 
+save = False
 uncertainty = True
 
 lower_q = .21
 upper_q = 1-lower_q
 
 if not uncertainty:
+    matplotlib.rcParams.update(matplotlib.rcParamsDefault)
     fig, axs = plt.subplots(2, 3, figsize=(10, 15))
     y_max = 0
     for i, folder in enumerate(folders):
@@ -99,11 +103,6 @@ if not uncertainty:
             )
 
     axs[0, 0].legend()
-    # axs[0, 1].legend()
-    # axs[0, 2].legend()
-    # axs[1, 0].legend()
-    # axs[1, 1].legend()
-    # axs[1, 2].legend()
 
     axs[0, 0].set_title('adjoint norm score')
     axs[0, 1].set_title('sample adjoint norm')
@@ -117,18 +116,23 @@ if not uncertainty:
     plt.show()
 
 else:
+    matplotlib.rcParams.update({'font.size': 22})
     def score_data(data, stat):
         if stat == 'adjoint_norm':
             return jnp.quantile(data, upper_q, axis=-1) / jnp.quantile(data, lower_q, axis=-1)
         else:
             return data
-    start = 1
-    n_seeds = 10
+    start = 16
+    n_seeds = 5
     stop = start + n_seeds 
     step = (stop - start) // n_seeds
     stats = ['adjoint_norm', 'num_steps', 'acc']
     stat_names = {'adjoint_norm': 'Adjoint Norm', 'num_steps': 'NFE', 'acc': 'Loss'}
-    sup_folder_names = {'pollution_RegularFunc_skew=True': 'Regular', 'pollution_PDEFunc_skew=True': 'Skew Symmetric'}
+    sup_folder_names = {
+        'pollution_RegularFunc_skew=True': 'Regular', 
+        'pollution_PDEFunc_skew=True': 'Skew Symmetric',
+        'pollution_PDEFunc_skew=False': 'Unrestricted',
+    }
     x_labels = {'adjoint_norm': 'Training Steps', 'num_steps': 'Training Steps', 'acc': 'Validation Steps'}
     results = {key: {keyi: [] for keyi in stats} for key in folders}
     for sup_folder in folders:
@@ -170,6 +174,7 @@ else:
     plt.show()
 
 
-save = input('do you want to save? (yes/no)')
-if save == 'yes':
-    fig.savefig('outputs/air_pollution_results.pdf')
+if save:
+    save = input('do you want to save? (yes/no)')
+    if save == 'yes':
+        fig.savefig('outputs/air_pollution_results.pdf')

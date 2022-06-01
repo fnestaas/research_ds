@@ -17,8 +17,8 @@ import pickle
 CHECK_BOTH = True 
 CHECK_B = False
 TAKE_LOG = True
-TAKE_RATIO = True
-SYM = False
+TAKE_RATIO = False
+SYM = True
 N_runs = 1
 
 def frobenius(A):

@@ -44,10 +44,12 @@ class NeuralODEClassifier(eqx.Module):
         new_t = jnp.linspace(ti[0], ti[-1], N)
         node_out = vmap(self.pred_partial, in_axes=(None, 0, None))(ti, yi, False)
 
-        end_adjoint = vmap(
-            grad(lambda y: loss_func(labels, self.pred_rest(ti, y), self)), 
-            in_axes=0
-        )(node_out) 
+        # end_adjoint = vmap(
+        #     grad(lambda y: loss_func(labels, self.pred_rest(ti, y), self)), 
+        #     in_axes=0
+        # )(node_out) 
+
+        end_adjoint = grad(lambda y: loss_func(labels, vmap(self.pred_rest, in_axes=(None, 0))(ti, y), self))(node_out)
 
         joint_end_state = jnp.concatenate([end_adjoint, node_out], axis=-1)
         

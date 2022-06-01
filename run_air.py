@@ -2,12 +2,13 @@ import os
 import subprocess
 
 def main():
-    start = 2
-    n_seeds = 9
+    start = 21
+    n_seeds = 100
     end = n_seeds + start
+    step = (end - start)//n_seeds
 
-    skew = True # irrelevant for RegularFunc tests
-    for seed in range(start, end, (end - start)//n_seeds): 
+    for seed in range(start, end, step):
+        skew = True
         subprocess.run([ 
             'python', 
             'air_pollution_test.py',
@@ -16,11 +17,7 @@ def main():
             str(seed), 
             f'tests/pollution_RegularFunc_{skew=}{seed}'
         ])
-
-    assert False
-    for skew in [True, False]:
-        sk = 'skew' if skew else 'any'
-        for seed in range(start, end, (end - start)//n_seeds): 
+        for skew in [True, False]:
             subprocess.run([ 
                 'python', 
                 'air_pollution_test.py',

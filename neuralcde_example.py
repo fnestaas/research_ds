@@ -14,7 +14,7 @@ import optax  # https://github.com/deepmind/optax
 from models.NeuralCDE import NeuralCDE, CDEPDEFunc, CDERegularFunc
 # from models.Func import PDEFunc, RegularFunc
 
-matplotlib.rcParams.update({"font.size": 30})
+matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 
 def get_data(dataset_size, add_noise, cat_dim=None, *, key):
 
@@ -61,7 +61,7 @@ def main(
     batch_size=32,
     lr=1e-3,
     steps=1000,
-    seed=567,
+    seed=56791,
     cat_dim=None
 ):
     key = jrandom.PRNGKey(seed)

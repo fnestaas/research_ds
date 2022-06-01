@@ -1,4 +1,4 @@
-# https://archive.ics.uci.edu/ml/datasets/Beijing+Multi-Site+Air-Quality+Data#
+# https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+(Diagnostic)
 import numpy as np
 from torch.utils import data
 from torchvision.datasets import MNIST
@@ -19,29 +19,30 @@ import os
 import argparse
 
 import torch
+import jax.nn as jnn
 
-parser = argparse.ArgumentParser('Run MNIST test')
-parser.add_argument('FUNC', ) # RegularFunc or whatever else
-parser.add_argument('SKEW', type=str)
-parser.add_argument('SEED', type=str)
-parser.add_argument('dst')
+# parser = argparse.ArgumentParser('Run MNIST test')
+# parser.add_argument('FUNC', ) # RegularFunc or whatever else
+# parser.add_argument('SKEW', type=str)
+# parser.add_argument('SEED', type=str)
+# parser.add_argument('dst')
 
-args = parser.parse_args()
+# args = parser.parse_args()
 
-FUNC = args.FUNC
-SEED = int(args.SEED)
-SKEW = args.SKEW == 'True'
-dst = args.dst
-print(f'\nrunning with args {args}\n')
+# FUNC = args.FUNC
+# SEED = int(args.SEED)
+# SKEW = args.SKEW == 'True'
+# dst = args.dst
+# print(f'\nrunning with args {args}\n')
 
-# FUNC = 'PDEFunc'
-# SKEW = True
-# SEED = 0
-# dst = f'tests/pollution_{FUNC=}_{SKEW=}{SEED}'
+FUNC = 'RegularFunc'
+SKEW = True
+SEED = 0
+dst = f'tests/cancer_{FUNC=}_{SKEW=}{SEED}'
 
 print(dst)
 
-LABEL = 'CO'
+LABEL = 1
 
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -49,7 +50,9 @@ torch.manual_seed(SEED)
 TRACK_STATS = True 
 DO_BACKWARD = True
 
-batch_size = 128 # 256
+if not DO_BACKWARD: print('\nWarning: No adjoint computation')
+
+batch_size = 32 # 256
 
 def numpy_collate(batch):
   if isinstance(batch[0], np.ndarray):
@@ -81,10 +84,11 @@ class NumpyLoader(data.DataLoader):
 class MyDataset(data.Dataset):
     def __init__(self, df, target=LABEL, mean=0, std=1, seed=0):
         df = df.sample(frac=1.0, random_state=seed)
-        df = df.fillna(df.median())
+        self.labels = (df[target].to_numpy() == 'M').astype(int)
+        df = df.drop(columns=[0, target])
+        df = df.fillna(df.median()).dropna()
         df = (df - mean) / std
-        self.labels = df[target].to_numpy()
-        self.inputs = df.drop(columns=[target]).to_numpy()
+        self.inputs = df.to_numpy()
     
     def __len__(self):
         return len(self.labels)
@@ -93,18 +97,18 @@ class MyDataset(data.Dataset):
         return self.inputs[idx], self.labels[idx]
 
 
-dir = 'data/air_quality/air_quality/'
+dir = 'data/breast_cancer/'
 files = os.listdir(dir)
 
-df = pd.read_csv(dir + str(files[0]))
-df = df.select_dtypes(include=['float64', 'int64'])# df.loc[:, df.dtypes != object]
+df_raw = pd.read_csv(dir + str(files[0]), names=list(range(32)))
+df = df_raw.select_dtypes(include=['float64'])
 means = df.mean()
 stds = df.std()
 
-msk = np.random.rand(len(df)) < 0.2
+msk = np.random.rand(len(df)) < 0.8
 
-test_set = df[msk]
-train_set = df[~msk]
+train_set = df_raw[msk]
+test_set = df_raw[~msk]
 
 # Get full test dataset
 dataset_train = MyDataset(train_set, mean=means, std=stds, seed=SEED)
@@ -118,10 +122,10 @@ test_output = test_set_[LABEL].to_numpy()
 
 def main(
     lr=1e-3, 
-    n_epochs=1,
-    steps_per_epoch=150,
+    n_epochs=20,
+    steps_per_epoch=200,
     seed=SEED,
-    print_every=10,
+    print_every=20,
 ):
     key = jrandom.PRNGKey(seed)
     _, model_key, l = jrandom.split(key, 3)
@@ -133,10 +137,9 @@ def main(
         func = node.PDEFunc(d=d, width_size=width_size, depth=depth, integrate=False, skew=SKEW, seed=seed) # number of steps taken to solve is very important. Use more advanced method?
     elif FUNC == 'RegularFunc':
         func = node.RegularFunc(d=d, width_size=width_size, depth=depth, seed=seed,)
-        # model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True)
     else:
         raise NotImplementedError
-    model = node.NeuralODEClassifier(func, in_size=15, out_size=1, key=model_key, use_out=True, activation=lambda x: x)
+    model = node.NeuralODEClassifier(func, in_size=30, out_size=1, key=model_key, use_out=True, activation=jnn.sigmoid)
     grad_tracker = StatTracker(['adjoint_norm'])
 
     validation_loss = []
@@ -163,13 +166,11 @@ def main(
         return loss, model, opt_state
 
     def _loss_func(y, y_pred, model, lam=1e0):
-        error = y - y_pred.reshape(y.shape)
-        loss = jnp.square(error) 
-        return jnp.mean(loss) # + lam * jnp.mean(jnp.square(model.get_params()))
+        loss = y * jnp.log(y_pred.reshape(y.shape) + 1e-6) + (1 - y) * jnp.log(1 - y_pred.reshape(y.shape) + 1e-6)
+        return -jnp.mean(loss) # + lam * jnp.mean(jnp.square(model.get_params()))
 
     for epoch in range(n_epochs):
         optim = optax.adabelief(lr)
-        # optim = optax.adam(lr)
         opt_state = optim.init(eqx.filter(model, eqx.is_inexact_array))
         steps = steps_per_epoch
         print(f'\nepoch {epoch+1}/{n_epochs}')

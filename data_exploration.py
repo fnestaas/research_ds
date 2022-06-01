@@ -1,10 +1,11 @@
 import pandas as pd 
 import os
 
-dir = 'data/air_quality/air_quality/'
+dir = 'data/breast_cancer/'
 files = os.listdir(dir)
 
-df = pd.read_csv(dir + str(files[0]))
+df = pd.read_csv(dir + str(files[0]), names=list(range(32)))
+# df = df.select_dtypes(include=['float64', 'int64'])# df.loc[:, df.dtypes != object]
 
 print(df.shape)
 print(df.isna().sum())
