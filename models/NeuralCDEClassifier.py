@@ -24,7 +24,6 @@ class NeuralCDEClassifier(eqx.Module):
         rtol=1e-3, 
         atol=1e-6, 
         use_out=True, 
-        input_layer=None, 
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
@@ -43,7 +42,7 @@ class NeuralCDEClassifier(eqx.Module):
         )
         self.output_layer = LinearWithParams(func.hidden_size, out_size, key=key)
         self.activation = activation
-        self.n_params = self.ncde.n_params + self.output_layer.n_params # only care about this
+        self.n_params = self.ncde.n_params + self.output_layer.n_params 
         self.use_out = use_out
 
     def backward(self, ti, yi, loss_func, labels, N=100):
@@ -67,7 +66,7 @@ class NeuralCDEClassifier(eqx.Module):
         return self.ncde.get_stats(which=which)
 
     def pred_partial(self, ts, x, update=False):
-        return self.ncde(ts, x)[-1, :]
+        return self.ncde(ts, x, update=update)[-1, :]
     
     def pred_rest(self, ts, x):
         if self.use_out:
@@ -75,7 +74,7 @@ class NeuralCDEClassifier(eqx.Module):
         return self.activation(x)
 
     def get_params(self):
-        return jnp.concatenate([self.ncde.get_params(), self.output_layer.get_params()])# ignore others
+        return jnp.concatenate([self.ncde.get_params(), self.output_layer.get_params()])
 
     def set_params(self, params):
         n1 = 0

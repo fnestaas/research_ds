@@ -13,27 +13,20 @@ class LinearWithParams(Linear):
         self.n_params = (in_features + int(use_bias)) * out_features 
 
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            return {'bias': self.bias, 'weight': self.weight}
+    def get_params(self):
+        if self.bias is not None:
+            return jnp.concatenate([self.bias, self.weight.reshape((-1, ))], axis=0) # return a single vector of parameters
         else:
-            if self.bias is not None:
-                return jnp.concatenate([self.bias, self.weight.reshape((-1, ))], axis=0) # return a single vector of parameters
-            else:
-                return self.weight.reshape((-1, ))
+            return self.weight.reshape((-1, ))
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            bias = params['bias']
-            weight = params['weight']
+    def set_params(self, params):
+        if self.n_params is not None:
+            assert len(params) == self.n_params
+        if self.bias is not None:
+            bias = params[:self.out_features]
+            weight = params[self.out_features:].reshape(self.weight.shape)
         else:
-            if self.n_params is not None:
-                assert len(params) == self.n_params
-            if self.bias is not None:
-                bias = params[:self.out_features]
-                weight = params[self.out_features:].reshape(self.weight.shape)
-            else:
-                weight = params.reshape(self.weight.shape)
+            weight = params.reshape(self.weight.shape)
         
         assert weight.shape == self.weight.shape, f'{weight.shape=}, {self.weight.shape=}'
         if self.bias is not None:
@@ -70,23 +63,13 @@ class MLPWithParams(MLP):
         self.layers = layers
         self.n_params = int(sum([l.n_params for l in layers]))
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            params = {}
-            for i, l in enumerate(self.layers):
-                params[i] = l.get_params(as_dict=True)
-            return params
-        else:
-            return jnp.concatenate([l.get_params(as_dict=False) for l in self.layers], axis=0)
+    def get_params(self, ):
+        return jnp.concatenate([l.get_params() for l in self.layers], axis=0)
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            for l, d in zip(self.layers, params.values()):
-                l.set_params(d, as_dict=True)
-        else:
-            counter = 0
-            for l in self.layers:
-                layer_size = l.n_params
-                p = params[counter:counter+layer_size]
-                l.set_params(p, as_dict=False)
-                counter = counter + layer_size
+    def set_params(self, params):
+        counter = 0
+        for l in self.layers:
+            layer_size = l.n_params
+            p = params[counter:counter+layer_size]
+            l.set_params(p)
+            counter = counter + layer_size

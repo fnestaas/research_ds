@@ -35,8 +35,8 @@ import torch
 # dst = args.dst
 # print(f'\nrunning with args {args}\n')
 
+FUNC = 'PDEFunc'
 # FUNC = 'RegularFunc'
-FUNC = 'RegularFunc'
 SKEW = True
 SEED = 0
 dst = f'tests/speech_{FUNC=}_{SKEW=}{SEED}'
@@ -115,7 +115,7 @@ mnist_dataset_test = SPEECHCOMMANDS(
 
 
 def main(
-    lr=1e-1,
+    lr=1e-2,
     n_epochs=4,
     steps_per_epoch=200,
     seed=SEED,
@@ -123,7 +123,7 @@ def main(
 ):  
     print(
         "TODO: This is working, try to implement tracking stats (sometimes) and adjoint! Think about crashes if you have the time, ", 
-        "otherwise just save whatever progress you make"
+        "otherwise just save whatever progress you make (e.g. first k steps)"
     )
     key = jrandom.PRNGKey(seed)
     _, model_key, l = jrandom.split(key, 3)
@@ -137,7 +137,7 @@ def main(
     final_activation = lambda x: x
     if FUNC == 'PDEFunc':
         func = CDEPDEFunc(d=d, hidden_size=hidden_size, depth=depth, width_size=width_size, seed=seed, final_activation=final_activation)
-        func.set_params(func.get_params()*1e-6)
+        # func.set_params(func.get_params()*1e-6)
     elif FUNC == 'RegularFunc':
         func = CDERegularFunc(d=d, hidden_size=hidden_size, depth=depth, width_size=width_size, seed=seed, final_activation=final_activation)
     else:

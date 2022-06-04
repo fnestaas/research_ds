@@ -1,4 +1,7 @@
-from ast import keyword
+"""
+Verify that the output magnitudes are the same for the matrix-vector multiplication Func's as for regular Func's
+This is important to ensure that the resulting ODEs are not too stiff. 
+"""
 from models.Func import RegularFunc, PDEFunc
 from models.NeuralCDE import CDERegularFunc, CDEPDEFunc
 import jax.random as jrandom 
@@ -8,7 +11,7 @@ import numpy as np
 from matplotlib import cm
 
 def fwd(x, seed, d, depth, name):
-    fac = 4
+    fac = 2
     tau = 1 # does not impact magnitude
     if name == 'RegularFunc':
         return RegularFunc(d=d, width_size=fac*d, depth=depth, seed=seed)(None, x, None)
@@ -29,11 +32,11 @@ N_seeds = 3
 ds = [5, 10, 20, 50]
 depths = [5, 8, 10]
 
-names = [
-    'RegularFunc', 
-    'PDEFunc', 
-    # 'CDERegularFunc', 
-    # 'CDEPDEFunc', 
+names = [ # which Func's to check
+    # 'RegularFunc', 
+    # 'PDEFunc', 
+    'CDERegularFunc', 
+    'CDEPDEFunc', 
     'x']
 
 result = {
@@ -74,6 +77,9 @@ for i in range(row):
         # ax.set_zlim(0, 50)
         fig.colorbar(im, axs[col*i + j + col])
 
+"""
+Compare a ratio of two numbers:
+"""
 # to_plot = result['CDERegularFunc'] / result['CDEPDEFunc']
 # fig, ax = plt.subplots(1, 1,)
 # ax.imshow(to_plot)

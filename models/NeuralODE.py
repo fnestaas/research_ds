@@ -19,7 +19,9 @@ class StatTracker():
             self.attributes[key].append(val)
         
 class BackwardPasser(eqx.Module):
-
+    """
+    Class for computing the adjoint by integrating backwards
+    """
     func: Func
     d: int 
 
@@ -30,7 +32,7 @@ class BackwardPasser(eqx.Module):
         self.d = func.d
 
 
-    def func_with_params(self, params):
+    def ode2ode_func_with_params(self, params):
         """
         Generate a Func with parameters params;
         useful e.g. when computing the derivative of such a Func wrt its parameters
@@ -39,10 +41,10 @@ class BackwardPasser(eqx.Module):
         b = GatedODE(self.d, width=self.func.b.width, depth=self.func.b.depth, key=key)
         f = DynX()
         func = ODE2ODEFunc(b, f)
-        func.set_params(params, as_dict=False)
+        func.set_params(params)
         return func
 
-    def full_term_func(self, t, joint_state, args):
+    def full_term_ode2ode_func(self, t, joint_state, args):
         """
         Callable term to perform a backward pass to compute the adjoint, parameter gradients
         as a function of time, and the solution itself (needed to compute the others)
@@ -60,18 +62,18 @@ class BackwardPasser(eqx.Module):
         t3 = self.func(t, x, args)
 
         if grad_comp:
-            dfdth = jax.jacfwd(lambda th: self.func_with_params(th)(t, x, args))
-            t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))  
+            dfdth = jax.jacfwd(lambda th: self.ode2ode_func_with_params(th)(t, x, args))
+            t2 = adjoint @ dfdth(self.func.get_params())  
             return jnp.concatenate([t1, t2, t3]) # don't negate; diffrax does that
         else:
             return jnp.concatenate([t1, t2])
 
-    def pdefunc_with_params(self, params):
+    def func_with_params(self, params):
         func = PDEFunc(self.func.d, self.func.grad_nn.width_size, self.func.grad_nn.depth)
-        func.set_params(params, as_dict=False)
+        func.set_params(params)
         return func
 
-    def full_term_pdefunc(self, t, joint_state, args):
+    def full_term_func(self, t, joint_state, args):
         n = self.func.d
         adjoint = joint_state[:n]
         x = joint_state[-n:]
@@ -79,12 +81,11 @@ class BackwardPasser(eqx.Module):
 
         dfdz = jax.jacfwd(lambda z: self.func(t, z, args))
         
-
         t1 = - adjoint @ dfdz(x)
         t3 = self.func(t, x, args)
-        if grad_comp:
-            dfdth = jax.jacfwd(lambda th: self.pdefunc_with_params(th)(t, x, args))
-            t2 = adjoint @ dfdth(self.func.get_params(as_dict=False))
+        if grad_comp: # compute the gradients "manually"
+            dfdth = jax.jacfwd(lambda th: self.func_with_params(th)(t, x, args))
+            t2 = adjoint @ dfdth(self.func.get_params())
             return jnp.concatenate([t1, t2, t3])
         else:
             return jnp.concatenate([t1, t3])
@@ -96,9 +97,9 @@ class BackwardPasser(eqx.Module):
         adjoint, loss gradient wrt the parameters and state at the end time
         """
         if isinstance(self.func, ODE2ODEFunc):
-            term = self.full_term_func
+            term = self.full_term_ode2ode_func
         else:
-            term = self.full_term_pdefunc
+            term = self.full_term_func
 
         saveat = diffrax.SaveAt(ts=ts[::-1]) # diffrax doesn't work otherwise
         solution = diffrax.diffeqsolve(
@@ -111,7 +112,6 @@ class BackwardPasser(eqx.Module):
             stepsize_controller=diffrax.PIDController(),
             saveat=saveat,
             max_steps=2**14,
-            # adjoint=diffrax.BacksolveAdjoint(),
         )
         return solution
 
@@ -144,13 +144,8 @@ class NeuralODE(eqx.Module):
         """
         Compute solution at times ts with initial state y0
         """
-        # if self.keep_grads:
-        #     adj = diffrax.RecursiveCheckpointAdjoint()
-        # else:
-        #     adj = diffrax.NoAdjoint()
         if len(ts)>1:
             dt0 = ts[1] - ts[0] if len(ts) > 2 else (ts[-1] - ts[0]) / 100 # make sure initial stepsize is not too small
-            # dt0 = ts[1] - ts[0]
         else:
             dt0 = ts[-1] / 100
         solution = diffrax.diffeqsolve(
@@ -162,8 +157,6 @@ class NeuralODE(eqx.Module):
             y0=y0,
             stepsize_controller=diffrax.PIDController(rtol=self.rtol, atol=self.atol),
             saveat=diffrax.SaveAt(ts=ts),
-            # adjoint=diffrax.BacksolveAdjoint(), 
-            # max_steps=None
         )
         return solution
 
@@ -209,96 +202,10 @@ class NeuralODE(eqx.Module):
     def backward(self, ts, joint_end_state):
         return self.backwardpasser.backward(ts, joint_end_state)
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            return {'func': self.func.get_params(as_dict=True)}
-        else: 
-            return self.func.get_params(as_dict=False)
+    def get_params(self):
+        return self.func.get_params()
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            self.func.set_params(params['func'], as_dict=True)
-        else:
-            if self.n_params is not None:
-                assert len(params) == self.n_params
-            self.func.set_params(params, as_dict=False)
-
-class SymmetricLoss():
-    func: Func 
-    full: Boolean
-
-    def __init__(self, func, full=False) -> None:
-        self.func = func
-        self.full = full
-
-    def full_penalty(self, ts, last_pred):
-        """
-        Compute the symmetric part of the jacobian at x. This is faster than computing the adjoint and then the norm of the adjoint
-        """
-        shp = last_pred.shape
-        ndim = len(shp)
-        if ndim == 3:
-            dfdz = jnp.zeros((shp[0], shp[1], shp[-1], shp[-1]))
-            to_norm = jnp.zeros(dfdz.shape)
-            diff_func = lambda z: self.func(ts, z, [])
-            for b in range(shp[0]):
-                curr = last_pred[b, :, :]
-                jac = jax.vmap(jax.jacrev(diff_func), in_axes=(-2))(curr)
-                dfdz = dfdz.at[b, :, :, :].set(jac)
-                to_norm = to_norm.at[b, :, :, :].set((jnp.transpose(jac, axes=(0, 2, 1)) + jac)/2)
-
-        elif ndim == 2:
-            dfdz = jax.vmap(jax.jacrev(lambda z: self.func(ts, z, [])), in_axes=(-2))(self.last_pred)
-            to_norm = (dfdz + jnp.transpose(dfdz)) / 2
-        else:
-            raise Exception(f'NeuralODE.last_pred had {ndim} dimensions, but expected 2 or 3; cannot compute symmetric jacobian')
-        
-        
-        return jnp.sum(jnp.sum(jnp.square(to_norm), axis=-1), axis=-1)
-
-    def minimal_penalty(self, ts, last_pred):
-        # penalize only diagonal elements of jacobian (not a_{iji})
-        shp = last_pred.shape
-        ndim = len(shp)
-        if ndim == 3:
-            dfdz = jnp.zeros((shp[0], shp[1], shp[-1]))
-            for b in range(shp[0]):
-                for t in range(shp[1]):
-                    for i in range(shp[2]):
-                        diff_func = lambda z: self.func(ts, z, [])[i]
-                        grad = jax.grad(diff_func)(last_pred[b, t, :])[i]
-                        dfdz = dfdz.at[b, t, i].set(grad)
-        else:
-            raise Exception(f'NeuralODE.last_pred had {ndim} dimensions, but expected 2 or 3; cannot compute symmetric jacobian')
-        return jnp.sum(jnp.square(dfdz), axis=-1)
-
-    def select_diag(self, tensor):
-        s = tensor.shape
-        id = jnp.identity(tensor.shape[-1]).reshape((-1, )) > 0
-        tensor = jnp.reshape(tensor, (s[-1], s[-1], s[-1]))
-        tensor = jnp.swapaxes(tensor, 1, 2)
-        tensor = jnp.reshape(tensor, (-1, s[-1]))
-        result = tensor[id, :]
-        return result
-
-    def partial_penalty(self, ts, last_pred):
-        # penalize only a_{iji}
-        shp = last_pred.shape
-        ndim = len(shp)
-        if ndim == 3:
-            to_penalize = jnp.zeros((shp[0], shp[1]))
-            for b in range(shp[0]):
-                diag_a = lambda z: jnp.reshape(self.func.pred_skew(z, 1), (-1, ))
-                fct = lambda z: self.select_diag(jax.jacfwd(diag_a)(z))
-                derivatives = jax.vmap(fct, in_axes=0)(last_pred[b, :, :])
-                penalty = jnp.sum(jnp.sum(jnp.square(derivatives), axis=-1), axis=-1)
-                to_penalize = to_penalize.at[b, :].set(penalty)
-        else:
-            raise Exception(f'NeuralODE.last_pred had {ndim} dimensions, but expected 2 or 3; cannot compute symmetric jacobian')
-        return to_penalize
-
-    def __call__(self, ts, last_pred):
-        if self.full:
-            return self.full_penalty(ts, last_pred)
-        else:
-            return self.partial_penalty(ts, last_pred)
+    def set_params(self, params):
+        if self.n_params is not None:
+            assert len(params) == self.n_params
+        self.func.set_params(params)

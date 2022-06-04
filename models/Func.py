@@ -19,21 +19,21 @@ class DynX(eqx.Module):
     def __call__(self, x):
         return x
 
-    def get_params(self, as_dict=False):
+    def get_params(self):
         return None
     
-    def set_params(self, params, as_dict=False):
+    def set_params(self, params):
         pass
 
 class Func(eqx.Module):
     d: int 
 
     @abstractmethod
-    def get_params(self, as_dict=False):
+    def get_params(self):
         pass
 
     @abstractmethod
-    def set_params(self, params, as_dict=False):
+    def set_params(self, params):
         pass
 
 class ODE2ODEFunc(Func):
@@ -63,31 +63,19 @@ class ODE2ODEFunc(Func):
         
         return jnp.concatenate([f, jnp.reshape(bw, newshape=(d*d))], axis=0)
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            params = {}
-            params['b'] = self.b.get_params(as_dict=True)
-            params['f'] = self.f.get_params(as_dict=True)
-            return params
-        else:
-            return self.b.get_params(as_dict=False) # ignore f in this case
+    def get_params(self):
+        return self.b.get_params() # ignore f in this case
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            self.b.set_params(params['b'])
-            if 'f' in params.keys():
-                self.f.set_params(params['f'], as_dict=True)
-        else:
-            if self.n_params is not None:
-                assert len(params) == self.n_params
-            self.b.set_params(params[:self.b.n_params], as_dict=False)
-            if self.b.n_params < len(params):
-                print('Setting params of f')
-                self.f.set_params(params[self.b.n_params:], as_dict=False)
+    def set_params(self, params):
+        if self.n_params is not None:
+            assert len(params) == self.n_params
+        self.b.set_params(params[:self.b.n_params])
+        if self.b.n_params < len(params):
+            print('Setting params of f')
+            self.f.set_params(params[self.b.n_params:])
 
 class PDEFunc(Func):
     init_nn: LinearWithParams
-    # init_nn: MLPWithParams
     grad_nn: MLPWithParams
     final_grad: LinearWithParams
     d: int
@@ -107,16 +95,20 @@ class PDEFunc(Func):
         key = jrandom.PRNGKey(seed)
         k1, k2, k3 = jrandom.split(key, 3)
         in_size = d
-        normalization = jnp.sqrt(d - int(skew)) * jnp.sqrt(width_size / d) # works, empirically
-        self.init_nn = LinearWithParams(1, in_size, key=k1)
+        self.init_nn = LinearWithParams(1, d, key=k1)
         self.init_nn.set_params(
-            self.init_nn.get_params() / normalization
+            # normalize by a factor sqrt2 because this contributes half of the magnitude
+            # and by width size since that is what the bias is normally normalized by
+            self.init_nn.get_params() / jnp.sqrt(2*width_size)
         )
         grad_out = d ** 2
         self.grad_nn = MLPWithParams(in_size, width_size, width_size, depth-1, key=k2, final_activation=lambda x: x)
         self.final_grad = LinearWithParams(width_size, grad_out, key=k3, use_bias=True)
         # normalize
-        self.final_grad.set_params(self.final_grad.get_params()/normalization/width_size)
+        self.final_grad.set_params(
+            # normalize by sqrt(2(d - int(skew))) since it contributes half the magnitude for d-int(skew) terms
+            self.final_grad.get_params()/jnp.sqrt(2*(d - int(skew)))
+        )
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
         self.N = N
         self.skew = skew
@@ -138,11 +130,17 @@ class PDEFunc(Func):
 
     def integrand(self, x, s):
         out = self.pred_mat(x, s)
-        return out @ x
+        res = out @ x
+        # Avoid large outputs by dividing by norm(x) when it is large
+        # We also want to avoid this division if norm(x) is small for the same reason
+        b = 4
+        div = jnp.power(1 + jnp.power(jnp.linalg.norm(x), b), 1/b)
+        return res / div 
 
     def pred_mat(self, x, s):
+        # predict the matrix for matrix-vector multiplication (unnormalized)
         d = self.d
-        out = self.grad_nn(s*x) # \nabla f(s*x)
+        out = self.grad_nn(s*x) 
         out = self.final_grad(out)
         out = self.final_activation(out)
         out = jnp.reshape(out, (d, d))
@@ -157,20 +155,15 @@ class PDEFunc(Func):
         
 
     def pred_init(self):
-        # return self.init_nn(jnp.zeros((self.d, ))).reshape((self.d, ))
         return self.init_nn(jnp.array([1])).reshape((self.d, ))
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            raise NotImplementedError
-        return jnp.concatenate([self.init_nn.get_params(as_dict=as_dict), self.grad_nn.get_params(as_dict=as_dict)])
+    def get_params(self):
+        return jnp.concatenate([self.init_nn.get_params(), self.grad_nn.get_params()])
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            raise NotImplementedError 
+    def set_params(self, params):
         n_init = self.init_nn.n_params
-        self.init_nn.set_params(params[:n_init], as_dict=as_dict)
-        self.grad_nn.set_params(params[n_init:], as_dict=as_dict)
+        self.init_nn.set_params(params[:n_init])
+        self.grad_nn.set_params(params[n_init:])
 
 class RegularFunc(Func):
     nn: MLPWithParams
@@ -193,14 +186,10 @@ class RegularFunc(Func):
     def __call__(self, ts, x, args):
         return self.nn(x)
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            raise NotImplementedError
+    def get_params(self):
         return self.nn.get_params()
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            raise NotImplementedError 
+    def set_params(self, params):
         self.nn.set_params(params)
 
 class PWConstFunc(Func):
@@ -237,17 +226,13 @@ class PWConstFunc(Func):
         A = jnp.reshape(A, (d, d)) # pw const matrix
         return (A - jnp.transpose(A))
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            raise NotImplementedError
-        return jnp.concatenate([self.nn1.get_params(as_dict=as_dict), self.nn2.get_params(as_dict=as_dict), self.init_nn.get_params(as_dict=as_dict)])
+    def get_params(self):
+        return jnp.concatenate([self.nn1.get_params(), self.nn2.get_params(), self.init_nn.get_params()])
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            raise NotImplementedError 
+    def set_params(self, params):
         n1 = self.nn1.n_params 
         n2 = n1+self.init_nn.n_params
-        self.nn1.set_params(params[:n1], as_dict=as_dict)
-        self.nn2.set_params(params[n1:n2], as_dict=as_dict)
-        self.init_nn.set_params(params[n2:], as_dict=as_dict)
+        self.nn1.set_params(params[:n1])
+        self.nn2.set_params(params[n1:n2])
+        self.init_nn.set_params(params[n2:])
         

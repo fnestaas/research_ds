@@ -12,8 +12,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 import optax  # https://github.com/deepmind/optax
 from models.NeuralCDE import NeuralCDE, CDEPDEFunc, CDERegularFunc
-# from models.Func import PDEFunc, RegularFunc
-
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 
 def get_data(dataset_size, add_noise, cat_dim=None, *, key):
@@ -79,7 +77,7 @@ def main(
     final_activation = lambda x: x 
     # final_activation = jnn.tanh
     integrate = False
-    skew = False
+    skew = True
     which_func = 'PDEFunc'
     # which_func = 'RegularFunc'
 
@@ -89,8 +87,7 @@ def main(
         func = CDEPDEFunc(d=d, hidden_size=hidden_size, width_size=width_size, depth=depth, seed=seed, skew=skew, final_activation=final_activation, integrate=integrate, tau=tau)
     
     model = NeuralCDE(d, width_size=width_size, depth=depth, hidden_size=hidden_size, key=model_key, func=func)
-    # model.set_params(model.get_params()*1e-6)
-
+    
     # Training loop like normal.
 
     def loss_func(label_i, pred, eps=1e-6):
@@ -100,7 +97,7 @@ def main(
 
     # @eqx.filter_jit
     def loss(model, ti, label_i, coeff_i):
-        pred = jax.vmap(model)(ti, coeff_i)
+        pred = jax.vmap(model, in_axes=(0, 0, None, None))(ti, coeff_i, False, False)
         # Binary cross-entropy
         bxe = loss_func(label_i, pred)
         acc = jnp.mean((pred > 0.5) == (label_i == 1))
@@ -122,14 +119,9 @@ def main(
             lambda t, coeff, label: model.backward(t, coeff, loss_func, label), 
         )(ti, coeff_i, label_i)
         adjoint_norm = jnp.linalg.norm(backward_pass.ys[:, :, :model.func.hidden_size], axis=-1)
-        # pred, sol = jax.vmap(model)(ti, coeff_i, evolving_out=True)
-        # error = sol.ys - backward_pass.ys[:, ::-1, model.func.hidden_size:]
         print('mean adjoint norm', jnp.mean(adjoint_norm))
         print('adjoint std', jnp.median(jnp.std(adjoint_norm, axis=-1)))
         print('adjoint score', jnp.median(score_adjoint(adjoint_norm)))
-        # idx = jnp.argmax(jnp.std(adjoint_norm, axis=-1))
-        # plt.plot(adjoint_norm[idx, :])
-        # plt.show()
         model = eqx.apply_updates(model, updates)
         return bxe, acc, model, opt_state
 
@@ -145,16 +137,7 @@ def main(
             f"Step: {step}, Loss: {bxe}, Accuracy: {acc}, Computation time: "
             f"{end - start}"
         )
-        # print(
-        #     'num_steps', jnp.max(model.stats.attributes['num_steps'][-1].val)
-        # ) 
 
-        # print(
-        #     'state norm', jnp.max(model.stats.attributes['state_norm'][-1].val.primal)
-        # )
-        # print(
-        #     'state norm std', jnp.std(model.stats.attributes['state_norm'][-1].val.primal) # not really relevant, we care about the adjoint
-        # )
     ts, coeffs, labels, _ = get_data(dataset_size, add_noise, key=test_data_key)
     bxe, acc = loss(model, ts, labels, coeffs)
     print(f"Test loss: {bxe}, Test Accuracy: {acc}")

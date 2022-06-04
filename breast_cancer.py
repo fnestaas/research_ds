@@ -1,7 +1,6 @@
 # https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+(Diagnostic)
 import numpy as np
 from torch.utils import data
-from torchvision.datasets import MNIST
 import jax.numpy as jnp
 from jax import vmap, grad
 import pandas as pd
@@ -199,6 +198,7 @@ def main(
                         print(f'Test loss: {acc}') 
                         validation_loss.append(acc)
             except: 
+                print("\nfail\n")
                 return model, grad_tracker, validation_loss # give up if anything fails
     return model, grad_tracker, validation_loss
 

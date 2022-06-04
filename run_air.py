@@ -2,7 +2,7 @@ import os
 import subprocess
 
 def main():
-    start = 1022
+    start = 1500
     n_seeds = 100
     end = n_seeds + start
     step = (end - start)//n_seeds

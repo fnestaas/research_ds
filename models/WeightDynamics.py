@@ -79,27 +79,17 @@ class GatedODE(WeightDynamics):
         B = [f - jnp.transpose(f) for f in B]
         return jnp.array([a*b for a, b in zip(self.a, B)])
 
-    def get_params(self, as_dict=False):
-        if as_dict:
-            params = {}
-            for i, f in enumerate(self.f):
-                params[i] = f.get_params(as_dict=True)
-            return params
-        else:
-            return jnp.concatenate([l.get_params(as_dict=False) for l in self.f] + [self.a], axis=0)
+    def get_params(self):
+        return jnp.concatenate([l.get_params() for l in self.f] + [self.a], axis=0)
 
-    def set_params(self, params, as_dict=False):
-        if as_dict:
-            for f, v in zip(self.f, params.values()):
-                f.set_params(v, as_dict=True)
-        else:
-            if self.n_params is not None:
-                assert len(params) == self.n_params
-            counter = 0
-            for f in self.f:
-                p = params[counter:counter+f.n_params]
-                f.set_params(p, as_dict=False)
-                counter = counter + f.n_params
+    def set_params(self, params):
+        if self.n_params is not None:
+            assert len(params) == self.n_params
+        counter = 0
+        for f in self.f:
+            p = params[counter:counter+f.n_params]
+            f.set_params(p)
+            counter = counter + f.n_params
 
         
 

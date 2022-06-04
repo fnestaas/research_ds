@@ -1,3 +1,7 @@
+"""
+Plot the results from single or multiple test runs
+"""
+
 from cmath import nan
 import matplotlib.pyplot as plt 
 import joblib 
@@ -8,28 +12,21 @@ import jax.numpy as jnp
 import matplotlib
 import matplotlib.gridspec as gridspec
 
-which_test = 'cancer' # cancer
+which_test = 'cancer'
 folders = [
     f'{which_test}_RegularFunc_skew=True',
     f'{which_test}_PDEFunc_skew=True',
-    # f'{which_test}_PDEFunc_skew=False',
-    # 'cancer_RegularFunc_skew=True',
-    # 'cancer_PDEFunc_skew=False',
-    # 'cancer_PDEFunc_skew=True',
-    # 'cancer_PDEFunc_skew=True132',
-    # 'cancer_PDEFunc_skew=True133',
-    # 'cancer_PDEFunc_skew=True134',
-    # 'cancer_PDEFunc_skew=True135',
-    # 'cancer_PDEFunc_skew=True136',
+    f'{which_test}_PDEFunc_skew=False',
 ]
 
-save = True
-uncertainty = True
+save = False # whether to ask if you want to save the plot (if False, the plot is deleted without asking)
+uncertainty = True # Whether to plot for multiple experiments and thus calculate error bars
 
 lower_q = .05
 upper_q = 1-lower_q
 
 if not uncertainty:
+    # Plot single experiments
     matplotlib.rcParams.update(matplotlib.rcParamsDefault)
     fig, axs = plt.subplots(2, 3, figsize=(10, 15))
     y_max = 0
@@ -44,10 +41,6 @@ if not uncertainty:
         label=folder
         if len(adjoints) > 0:
             mean_var = [np.nanmean(np.quantile(adjoint, q=upper_q, axis=-1)/np.quantile(adjoint, q=lower_q, axis=-1)) for adjoint in adjoints]
-            # nan_mask = np.isnan(np.array([np.quantile(adjoint, q=.79, axis=-1)/np.quantile(adjoint, q=.21, axis=-1) for adjoint in adjoints]))
-            # num_nans = np.sum(nan_mask)
-            # print(f'got {num_nans/np.size(nan_mask)*100}% nans\n')
-            # mean_var = [np.mean(np.var(adjoint, axis=-1)) for adjoint in adjoints]
             epochs = np.arange(len(adjoints))
             y_max = max([y_max, 1.1*max(mean_var)])
             axs[0, 0].plot(
@@ -120,8 +113,9 @@ else:
     # Air: 1000 was a very weird run... 
     # cancer: 500 crashed using 30 epochs
     # cancer results are 500 - 549 (inclusive)
-    start = 500
-    n_seeds = 50
+    # from 1519 to 1524 we use sqrt(1+sqnorm(x))
+    start = 2500
+    n_seeds = 14
     stop = start + n_seeds 
     step = (stop - start) // n_seeds
     stats = ['adjoint_norm', 'num_steps', 'acc']
@@ -142,10 +136,10 @@ else:
     x_labels = {'adjoint_norm': 'Training Steps', 'num_steps': 'Training Steps', 'acc': 'Validation Steps'}
     results = {key: {keyi: [] for keyi in stats} for key in folders}
     for sup_folder in folders:
+        print(sup_folder)
         for stat in stats:
             n_fail = 0
             for seed in range(start, stop, step):
-                # if sup_folder != 'cancer_PDEFunc_skew=True': seed = seed + 100
                 folder = sup_folder + str(seed + n_fail)
                 while n_fail < stop - seed:
                     try:
@@ -168,7 +162,7 @@ else:
                 else:
                     results[sup_folder][stat].append(jnp.array(data))
             results[sup_folder][stat] = jnp.stack([r for r in results[sup_folder][stat] if r.shape == results[sup_folder][stat][0].shape])
-            print(f'{n_fail=}')
+            print(f'{n_fail=}, {stat}')
     fig, axs = plt.subplots(1, len(stats))
     for stat, ax in zip(stats, axs):
         for sup_folder in folders:
@@ -176,6 +170,7 @@ else:
             N = data.shape[1]
             score = score_data(data, stat)
             mean = jnp.nanmedian(score, axis=0)
+            print(jnp.mean(mean), f'{stat}, {sup_folder}')
             std = jnp.std(score, axis=0)
             # lower = mean - std 
             # upper = mean + std
@@ -199,9 +194,7 @@ else:
             mx = np.max(tks)
             minor_ticks = np.arange(mn, mx, (mx-mn)/20)
             ax.set_yticks(minor_ticks, minor=True)
-            # ax.set_yticks(major_ticks)
             ax.grid(visible=True, which='both')
-    # fig.tight_layout()
     plt.show()
 
 

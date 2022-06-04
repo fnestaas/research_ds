@@ -1,3 +1,7 @@
+"""
+Check some properties of downloaded data
+"""
+
 import pandas as pd 
 import os
 
