@@ -25,60 +25,48 @@ class CDEFunc(eqx.Module):
 
 
 class CDEPDEFunc(CDEFunc):
-    init_nn: LinearWithParams# MLPWithParams
+    init_nn: LinearWithParams
     grad_nn: MLPWithParams
+    grad_final: LinearWithParams
     d: int
     hidden_size: int
     n_params: int
     seed: int
     skew: bool # whether to predict using a skew-symmetric matrix
     integrate: bool
+    final_activation: Callable
+    tau: float # directly influences the adjoint norm when not integrating
 
-    def __init__(self, d: int, hidden_size: int,  width_size: int, depth: int, seed=0, skew=True, final_activation=_identity, integrate=False, **kwargs) -> None:
+    def __init__(self, d: int, hidden_size: int,  width_size: int, depth: int, seed=0, skew=True, final_activation=_identity, integrate=False, tau=1, **kwargs) -> None:
         super().__init__(d, hidden_size, **kwargs)
 
         self.d = d
         self.seed = seed
 
         key = jrandom.PRNGKey(seed)
-        k1, k2 = jrandom.split(key, 2)
+        k1, k2, k3 = jrandom.split(key, 3)
+
+        # normalization = depth*d**2# depth**3/hidden_size**2#
+        normalization = jnp.sqrt(d * hidden_size)
 
         in_size = hidden_size
         regular_out = d * hidden_size
         self.init_nn = LinearWithParams(1, regular_out, key=k1)# MLPWithParams(in_size, out_size=regular_out, width_size=width_size, depth=1, key=k1, final_activation=final_activation)   
 
         grad_out = hidden_size * regular_out
-        self.grad_nn = MLPWithParams(in_size, grad_out, width_size, depth, key=k2, final_activation=final_activation) # predicts gradient of f
+        self.grad_nn = MLPWithParams(in_size, width_size, width_size, depth, key=k2, final_activation=lambda x: x) # predicts gradient of f
+        self.grad_final = LinearWithParams(width_size, grad_out, key=k3)
 
-        params = self.grad_nn.get_params()
-        k = grad_out * (width_size + 1) # the parameters which are in the last layer (+1 for bias)
-        self.grad_nn.set_params(
-            jnp.concatenate(
-                [
-                    params[:-k], 
-                    # normalize by the product since this is involved in two matrix-vector products
-                    params[-k:] / jnp.sqrt(d*(hidden_size - int(skew))) 
-                ]
-            )
-        )
-
-        params = self.init_nn.get_params()
-        k = regular_out * (width_size + 1) # the parameters which are in the last layer (+1 for bias)
-        self.init_nn.set_params(
-            jnp.concatenate(
-                [
-                    params[:-k], 
-                    # normalize since we multiply by a d-dimensional vector
-                    # Empirically, it looks like we should also normalize by the hidden size
-                    params[-k:] / jnp.sqrt(d*(hidden_size - int(skew)))
-                ]
-            )
-        )
+        # adjoust parameters, empirically, this worked well. 
+        self.grad_final.set_params(self.grad_final.get_params() / normalization / width_size)
+        self.init_nn.set_params(self.init_nn.get_params() / normalization)
         
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
         self.skew = skew
         self.hidden_size = hidden_size
         self.integrate = integrate
+        self.final_activation = final_activation
+        self.tau = tau
 
     def __call__(self, ts, x, args):
         z = x
@@ -88,7 +76,7 @@ class CDEPDEFunc(CDEFunc):
             y = jax.vmap(self.integrand, in_axes=(None, 0))(z, s) # A(sx)x
             integral = jnp.trapz(y, x=s, dx=1/N, axis=0) 
         else:
-            tau = 1/2 # hyperparameter; how to approximate the integral best possible? Actually also good performance for small values (1/10 e.g.)
+            tau = self.tau
             integral = self.integrand(z, tau) 
         
         return integral + self.pred_init()
@@ -101,6 +89,7 @@ class CDEPDEFunc(CDEFunc):
     def pred_mat(self, x, s):
         d = self.d
         out = self.grad_nn(s*x) # \nabla f(s*x)
+        out = self.final_activation(self.grad_final(out))
         out = jnp.reshape(out, (self.hidden_size, d, self.hidden_size))
         if self.skew:
             out = out - jnp.transpose(out, (2, 1, 0))
@@ -180,13 +169,10 @@ class NeuralCDE(NeuralODE):
     d: int
     n_params: int 
     stats: StatTracker
+    classify: boolean
 
-    def __init__(self, d, width_size, depth, hidden_size, func, *, key, to_track=['num_steps', 'state_norm'], **kwargs):
+    def __init__(self, d, width_size, depth, hidden_size, func, *, key, to_track=['num_steps', 'state_norm'], classify=True, **kwargs):
         super().__init__(func, to_track=to_track, **kwargs)
-        import warnings 
-        warnings.warn(
-            "NeuralCDE is currently implemented as a classifier. Would be better to make this a separate class."
-        )
         ikey, fkey, lkey = jrandom.split(key, 3)
         self.initial = MLPWithParams(d, hidden_size, width_size, depth, key=ikey)
         self.linear = LinearWithParams(hidden_size, 1, key=lkey)
@@ -198,6 +184,7 @@ class NeuralCDE(NeuralODE):
         self.stats = StatTracker(to_track)
         self.n_params = self.func.n_params + self.initial.n_params
         self.d = self.func.d
+        self.classify = classify
 
     def cde_backward_term(self, t, joint_state, args, cde_term):
         n = self.func.hidden_size
@@ -218,8 +205,11 @@ class NeuralCDE(NeuralODE):
         solver = diffrax.Tsit5()
         dt0 = -(ts[-1] - ts[0]) # integrating backwards in time
 
-        _, output = self.solve(ts, coeffs)
-
+        if self.classify:
+            _, output = self.solve(ts, coeffs)
+            
+        else:
+            output = self.solve(ts, coeffs)
         y_final = output.ys[-1, :]
         adjoint_final = jax.grad(lambda z: loss_func(label, self.pred_final(z)))(y_final)
 
@@ -264,19 +254,25 @@ class NeuralCDE(NeuralODE):
             y0,
             stepsize_controller=diffrax.PIDController(rtol=1e-3, atol=1e-6),
             saveat=saveat,
-            max_steps=2**14,
+            max_steps=2**15,
         )
-        if evolving_out:
-            prediction = jax.vmap(lambda y: self.pred_final(y)[0])(solution.ys)
+        if self.classify:
+            if evolving_out:
+                prediction = jax.vmap(lambda y: self.pred_final(y)[0])(solution.ys)
+            else:
+                (prediction,) = self.pred_final(solution.ys[-1])
+            return prediction, solution
         else:
-            (prediction,) = self.pred_final(solution.ys[-1])
-        return prediction, solution
+            return solution
 
     def __call__(self, ts, coeffs, evolving_out=False, update=True):
-        preds, sol = self.solve(ts, coeffs, evolving_out)
+        if self.classify:
+            preds, sol = self.solve(ts, coeffs, evolving_out)
+        else:
+            sol = self.solve(ts, coeffs, evolving_out)
         if update:
             self.stats.update(self.compute_stats(sol))
-        return preds
+        return preds if self.classify else sol.ys
 
     def compute_stats(self, solution):
         """

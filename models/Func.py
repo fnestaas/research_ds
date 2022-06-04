@@ -89,12 +89,14 @@ class PDEFunc(Func):
     init_nn: LinearWithParams
     # init_nn: MLPWithParams
     grad_nn: MLPWithParams
+    final_grad: LinearWithParams
     d: int
     n_params: int
     seed: int
     N: int # number of integration steps
     skew: bool # whether to predict using a skew-symmetric matrix
     integrate: bool # whether to predict by integrating
+    final_activation: Callable
 
     def __init__(self, d: int, width_size: int, depth: int, seed=0, N=100, skew=True, integrate=True, final_activation=_identity, **kwargs) -> None:
         super().__init__(d, **kwargs)
@@ -103,34 +105,34 @@ class PDEFunc(Func):
         self.seed = seed
 
         key = jrandom.PRNGKey(seed)
-        k1, k2 = jrandom.split(key, 2)
+        k1, k2, k3 = jrandom.split(key, 3)
         in_size = d
-        # self.init_nn = MLPWithParams(in_size, out_size=in_size, width_size=width_size, depth=depth, key=k1)   
+        normalization = jnp.sqrt(d - int(skew)) * jnp.sqrt(width_size / d) # works, empirically
         self.init_nn = LinearWithParams(1, in_size, key=k1)
+        self.init_nn.set_params(
+            self.init_nn.get_params() / normalization
+        )
         grad_out = d ** 2
-        self.grad_nn = MLPWithParams(in_size, grad_out, width_size, depth, key=k2, final_activation=final_activation) # predicts gradient of f
-        # we need to be careful when initializing the grad_nn for the distribution of the output to be the same as
-        # if we had not done matrix multiplication. Below, we make take care of this
-        params = self.grad_nn.get_params() 
-        k = grad_out * (width_size + 1) # the parameters which are in the last layer (+1 for bias)
-        self.grad_nn.set_params(jnp.concatenate([params[:-k], params[-k:] / jnp.sqrt(d - int(skew))]))
-        # self.efficient = efficient
+        self.grad_nn = MLPWithParams(in_size, width_size, width_size, depth-1, key=k2, final_activation=lambda x: x)
+        self.final_grad = LinearWithParams(width_size, grad_out, key=k3, use_bias=True)
+        # normalize
+        self.final_grad.set_params(self.final_grad.get_params()/normalization/width_size)
         self.n_params = self.init_nn.n_params + self.grad_nn.n_params
         self.N = N
         self.skew = skew
         self.integrate = integrate
+        self.final_activation = final_activation
 
     def __call__(self, ts, x, args):
-        # integrate
-        # z = jnp.concatenate([x, jnp.array([self.L])])
+        # integrate or predict the matrix directly
         z = x
         if self.integrate:
             s = jnp.linspace(0, 1, self.N+1)
             y = jax.vmap(self.integrand, in_axes=(None, 0))(z, s) # A(sx)x
             integral = jnp.trapz(y, x=s, dx=1/self.N, axis=0) 
         else:
-            tau = 1/2
-            integral = self.integrand(z, tau) 
+            tau = 1
+            integral = self.integrand(z, tau)
 
         return integral + self.pred_init()
 
@@ -141,6 +143,8 @@ class PDEFunc(Func):
     def pred_mat(self, x, s):
         d = self.d
         out = self.grad_nn(s*x) # \nabla f(s*x)
+        out = self.final_grad(out)
+        out = self.final_activation(out)
         out = jnp.reshape(out, (d, d))
         if self.skew:
             out = out - jnp.transpose(out) 

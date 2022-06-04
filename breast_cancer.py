@@ -21,26 +21,26 @@ import argparse
 import torch
 import jax.nn as jnn
 
-# parser = argparse.ArgumentParser('Run MNIST test')
-# parser.add_argument('FUNC', ) # RegularFunc or whatever else
-# parser.add_argument('SKEW', type=str)
-# parser.add_argument('SEED', type=str)
-# parser.add_argument('dst')
+parser = argparse.ArgumentParser('Run MNIST test')
+parser.add_argument('FUNC', ) # RegularFunc or whatever else
+parser.add_argument('SKEW', type=str)
+parser.add_argument('SEED', type=str)
+parser.add_argument('dst')
 
-# args = parser.parse_args()
+args = parser.parse_args()
 
-# FUNC = args.FUNC
-# SEED = int(args.SEED)
-# SKEW = args.SKEW == 'True'
-# dst = args.dst
-# print(f'\nrunning with args {args}\n')
+FUNC = args.FUNC
+SEED = int(args.SEED)
+SKEW = args.SKEW == 'True'
+dst = args.dst
+print(f'\nrunning with args {args}\n')
 
-FUNC = 'RegularFunc'
-SKEW = True
-SEED = 0
-dst = f'tests/cancer_{FUNC=}_{SKEW=}{SEED}'
+# FUNC = 'PDEFunc'
+# SKEW = True
+# SEED = 0
+# dst = f'tests/cancer_{FUNC=}_{SKEW=}{SEED}'
 
-print(dst)
+# print(dst)
 
 LABEL = 1
 
@@ -52,7 +52,7 @@ DO_BACKWARD = True
 
 if not DO_BACKWARD: print('\nWarning: No adjoint computation')
 
-batch_size = 32 # 256
+batch_size = 64 # 256
 
 def numpy_collate(batch):
   if isinstance(batch[0], np.ndarray):
@@ -114,15 +114,15 @@ test_set = df_raw[~msk]
 dataset_train = MyDataset(train_set, mean=means, std=stds, seed=SEED)
 training_generator = NumpyLoader(dataset_train, batch_size=batch_size, num_workers=0)
 dataset_test = MyDataset(test_set, mean=means, std=stds, seed=SEED)
-testing_generator = NumpyLoader(dataset_test, batch_size=4*batch_size, num_workers=0)
+testing_generator = NumpyLoader(dataset_test, batch_size=len(test_set), num_workers=0)
 
 test_set_ = test_set.sample(frac=.01, random_state=SEED)
 test_input = test_set_.drop(columns=[LABEL]).to_numpy()
 test_output = test_set_[LABEL].to_numpy()
 
 def main(
-    lr=1e-3, 
-    n_epochs=20,
+    lr=1e-2, 
+    n_epochs=15,
     steps_per_epoch=200,
     seed=SEED,
     print_every=20,
@@ -130,11 +130,12 @@ def main(
     key = jrandom.PRNGKey(seed)
     _, model_key, l = jrandom.split(key, 3)
 
-    d = 10
+    d = 4
     depth = 3
-    width_size = 64
+    width_size = 32
     if FUNC == 'PDEFunc':
-        func = node.PDEFunc(d=d, width_size=width_size, depth=depth, integrate=False, skew=SKEW, seed=seed) # number of steps taken to solve is very important. Use more advanced method?
+        func = node.PDEFunc(d=d, width_size=width_size, depth=depth, integrate=False, skew=SKEW, seed=seed) 
+        # if not SKEW: func.set_params(func.get_params()*1e-2)
     elif FUNC == 'RegularFunc':
         func = node.RegularFunc(d=d, width_size=width_size, depth=depth, seed=seed,)
     else:
@@ -147,7 +148,7 @@ def main(
     @eqx.filter_value_and_grad
     def grad_loss(model, ti, yi, labels):
         y_pred = vmap(model, in_axes=(None, 0, None))(ti, yi, TRACK_STATS)
-        return _loss_func(labels, y_pred, model, lam=1e0)
+        return _loss_func(labels, y_pred, model)
 
     # @eqx.filter_jit
     def make_step(ti, yi, model, opt_state, labels):
@@ -181,21 +182,24 @@ def main(
             length = 1
             # _ts = jnp.array([0., length])
             _ts = jnp.linspace(0., length, 100)
-            start = time.time()
-            loss, model, opt_state = make_step(_ts, yi, model, opt_state, labels)
-            end = time.time()
-            if (step % print_every) == 0 or step == steps - 1:
-                print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
-                # nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
-                # print(f'mean nfe: {nfe}')
-                
-                for step_, (test_input, test_output) in zip( 
-                    range(1), testing_generator 
-                ):
-                    preds = vmap(model, in_axes=(None, 0, None))(_ts, test_input, False)
-                    acc = _loss_func(test_output, preds, model)
-                    print(f'Test loss: {acc}') 
-                    validation_loss.append(acc)
+            try:
+                start = time.time()
+                loss, model, opt_state = make_step(_ts, yi, model, opt_state, labels)
+                end = time.time()
+                if (step % print_every) == 0 or step == steps - 1:
+                    print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
+                    # nfe = jnp.mean(model.get_stats()['num_steps'][-1]) # goes up if we save more often!
+                    # print(f'mean nfe: {nfe}')
+                    
+                    for step_, (test_input, test_output) in zip( 
+                        range(1), testing_generator 
+                    ):
+                        preds = vmap(model, in_axes=(None, 0, None))(_ts, test_input, False)
+                        acc = _loss_func(test_output, preds, model)
+                        print(f'Test loss: {acc}') 
+                        validation_loss.append(acc)
+            except: 
+                return model, grad_tracker, validation_loss # give up if anything fails
     return model, grad_tracker, validation_loss
 
 model, grad_tracker, validation_loss = main()

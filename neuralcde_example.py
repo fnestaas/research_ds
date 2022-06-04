@@ -75,17 +75,18 @@ def main(
     width_size = 64
     depth = 4
     hidden_size = 8
+    tau = 1/10
     final_activation = lambda x: x 
     # final_activation = jnn.tanh
     integrate = False
-    skew = True
+    skew = False
     which_func = 'PDEFunc'
     # which_func = 'RegularFunc'
 
     if which_func != 'PDEFunc':
         func = CDERegularFunc(d=d, hidden_size=hidden_size, width_size=width_size, depth=depth, seed=seed, final_activation=final_activation)
     else:
-        func = CDEPDEFunc(d=d, hidden_size=hidden_size, width_size=width_size, depth=depth, seed=seed, skew=skew, final_activation=final_activation, integrate=integrate)
+        func = CDEPDEFunc(d=d, hidden_size=hidden_size, width_size=width_size, depth=depth, seed=seed, skew=skew, final_activation=final_activation, integrate=integrate, tau=tau)
     
     model = NeuralCDE(d, width_size=width_size, depth=depth, hidden_size=hidden_size, key=model_key, func=func)
     # model.set_params(model.get_params()*1e-6)
@@ -107,7 +108,7 @@ def main(
 
     grad_loss = eqx.filter_value_and_grad(loss, has_aux=True)
 
-    def score_adjoint(adjoint, lower = .15):
+    def score_adjoint(adjoint, lower = .05):
         upper = 1-lower
         return jnp.quantile(adjoint, upper, axis=-1)/jnp.quantile(adjoint, lower, axis=-1)
 

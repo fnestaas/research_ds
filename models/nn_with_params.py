@@ -11,14 +11,16 @@ class LinearWithParams(Linear):
     def __init__(self, in_features: int, out_features: int, use_bias: bool = True, *, key: "jax.random.PRNGKey"):
         super().__init__(in_features, out_features, use_bias, key=key)
         self.n_params = (in_features + int(use_bias)) * out_features 
-        a = 0
 
 
     def get_params(self, as_dict=False):
         if as_dict:
             return {'bias': self.bias, 'weight': self.weight}
         else:
-            return jnp.concatenate([self.bias, self.weight.reshape((-1, ))], axis=0) # return a single vector of parameters
+            if self.bias is not None:
+                return jnp.concatenate([self.bias, self.weight.reshape((-1, ))], axis=0) # return a single vector of parameters
+            else:
+                return self.weight.reshape((-1, ))
 
     def set_params(self, params, as_dict=False):
         if as_dict:
@@ -27,11 +29,15 @@ class LinearWithParams(Linear):
         else:
             if self.n_params is not None:
                 assert len(params) == self.n_params
-            bias = params[:self.out_features]
-            weight = params[self.out_features:].reshape(self.weight.shape)
+            if self.bias is not None:
+                bias = params[:self.out_features]
+                weight = params[self.out_features:].reshape(self.weight.shape)
+            else:
+                weight = params.reshape(self.weight.shape)
         
         assert weight.shape == self.weight.shape, f'{weight.shape=}, {self.weight.shape=}'
-        object.__setattr__(self, 'bias', bias)
+        if self.bias is not None:
+            object.__setattr__(self, 'bias', bias)
         object.__setattr__(self, 'weight', weight)
 
 class MLPWithParams(MLP):

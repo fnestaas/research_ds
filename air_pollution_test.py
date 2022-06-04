@@ -33,6 +33,7 @@ SEED = int(args.SEED)
 SKEW = args.SKEW == 'True'
 dst = args.dst
 print(f'\nrunning with args {args}\n')
+print(f'{SKEW=}')
 
 # FUNC = 'PDEFunc'
 # SKEW = True
@@ -110,7 +111,7 @@ train_set = df[~msk]
 dataset_train = MyDataset(train_set, mean=means, std=stds, seed=SEED)
 training_generator = NumpyLoader(dataset_train, batch_size=batch_size, num_workers=0)
 dataset_test = MyDataset(test_set, mean=means, std=stds, seed=SEED)
-testing_generator = NumpyLoader(dataset_test, batch_size=4*batch_size, num_workers=0)
+testing_generator = NumpyLoader(dataset_test, batch_size=len(test_set), num_workers=0)
 
 test_set_ = test_set.sample(frac=.01, random_state=SEED)
 test_input = test_set_.drop(columns=[LABEL]).to_numpy()

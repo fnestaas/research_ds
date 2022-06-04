@@ -17,9 +17,10 @@ import pickle
 CHECK_BOTH = True 
 CHECK_B = False
 TAKE_LOG = True
-TAKE_RATIO = False
+TAKE_RATIO = True
 SYM = True
-N_runs = 1
+N_runs = 2
+start = 10
 
 def frobenius(A):
     return jnp.sum(jnp.square(A))
@@ -39,9 +40,9 @@ def get_mat(f, x):
     """
     return f.pred_mat(x, 1)
 
-def get_sym_frob(func, x, eps=1e-6, log=False, sym=SYM):
+def get_sym_frob(func, x, eps=1e-14, log=False, sym=SYM):
     diff = get_diff(func, x)
-    if SYM:
+    if sym:
         sd = 1/2 * (diff + jnp.transpose(diff))
     else:
         sd = 1/2 * (diff - jnp.transpose(diff))
@@ -56,8 +57,8 @@ def mean_ratio(func, x):
     diff = sym_diff(func, x) 
     return jnp.array([frobenius(B), frobenius(diff - B), frobenius(diff)])
 
-ds = [10, 50, 100, 150, 200]
-depths = [5, 10, 20, 30, 50] # the deeper the more asymmetric, but also slower. For some reason different for regfunc
+ds = [10, 20, 50, 100]
+depths = [5, 10, 20, 30] # the deeper the more asymmetric, but also slower. For some reason different for regfunc
 grid_skew = np.zeros((len(ds), len(depths)))
 grid_any = np.zeros((len(ds), len(depths)))
 grid_reg = np.zeros((len(ds), len(depths)))
@@ -67,7 +68,7 @@ if CHECK_BOTH:
     for i, d in enumerate(ds):
         for j, depth in enumerate(depths):
             rs = {True: [], False: [], 'reg': []}
-            for seed in range(N_runs):
+            for seed in range(start, start + N_runs):
                 key = jrandom.PRNGKey(seed) 
                 x = jrandom.normal(key=key, shape=(d, ))
                 for skew in [True, False]:
@@ -78,7 +79,7 @@ if CHECK_BOTH:
                 rs['reg'].append(get_sym_frob(func, x, log=TAKE_LOG))
                 del func
                 
-            rs[True] = jnp.mean(jnp.array(rs[True]))
+            rs[True] = jnp.mean(jnp.array(rs[True])) # mean over random seeds
             rs[False] = jnp.mean(jnp.array(rs[False]))
             rs['reg'] = jnp.mean(jnp.array(rs['reg']))
             grid_skew[i, j] = rs[True] 
@@ -103,8 +104,8 @@ poss[5] = axs[5].plot_surface(ds, depths, grid_any/grid_reg if not TAKE_LOG else
 axs[5].set_title('ratio any / RegularFunc')
 
 for ax, pos in zip(axs, poss):
-    ax.set_xlabel('depth')
-    ax.set_ylabel('d')
+    ax.set_xlabel('d')
+    ax.set_ylabel('depth')
     # fig.colorbar(pos, shrink=0.5, aspect=5)
 
 plt.show()

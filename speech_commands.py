@@ -1,14 +1,13 @@
 from torchaudio.datasets import SPEECHCOMMANDS
 import numpy as np
 from torch.utils import data
-from torchvision.datasets import MNIST
 import jax.numpy as jnp
 from jax import vmap, grad
 import pandas as pd
 import jax.nn as jnn
 
-from models import NeuralODEClassifier as node
 from models.NeuralCDE import CDEPDEFunc, CDERegularFunc, NeuralCDE
+from models.NeuralCDEClassifier import NeuralCDEClassifier
 from models.NeuralODE import StatTracker
 
 import equinox as eqx
@@ -18,6 +17,7 @@ import time
 import pickle
 import os
 import argparse
+import diffrax
 
 import torch
 
@@ -35,30 +35,33 @@ import torch
 # dst = args.dst
 # print(f'\nrunning with args {args}\n')
 
+# FUNC = 'RegularFunc'
 FUNC = 'RegularFunc'
-SKEW = False
+SKEW = True
 SEED = 0
 dst = f'tests/speech_{FUNC=}_{SKEW=}{SEED}'
 
 print(dst)
 
-LABEL = 'CO'
-
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 
-TRACK_STATS = True 
+TRACK_STATS = False 
 DO_BACKWARD = False
 
 batch_size = 32
-n_targets = 10
+n_targets = 35
 
 def one_hot(x, k, dtype=jnp.float32):
   """Create a one-hot encoding of x of size k."""
   return jnp.array(x[:, None] == jnp.arange(k), dtype)
 
 def numpy_collate(batch):
-  if isinstance(batch[0], np.ndarray):
+  if isinstance(batch[0], torch.Tensor):
+      s = 2 # subsample
+      max_length = max([t[:, ::s].shape[-1] for t in batch]) # for padding
+      return np.stack([np.concatenate([t.numpy()[:, ::s], np.zeros((1, max_length - t[:, ::s].shape[-1]))], axis=-1) for t in batch])
+  elif isinstance(batch[0], np.ndarray):
     return np.stack(batch)
   elif isinstance(batch[0], (tuple,list)):
     transposed = zip(*batch)
@@ -68,7 +71,7 @@ def numpy_collate(batch):
 
 class NumpyLoader(data.DataLoader):
   def __init__(self, dataset, batch_size=1,
-                shuffle=False, sampler=None,
+                shuffle=True, sampler=None,
                 batch_sampler=None, num_workers=0,
                 pin_memory=False, drop_last=False,
                 timeout=0, worker_init_fn=None):
@@ -112,48 +115,50 @@ mnist_dataset_test = SPEECHCOMMANDS(
 
 
 def main(
-    lr=1e-3, 
+    lr=1e-1,
     n_epochs=4,
     steps_per_epoch=200,
     seed=SEED,
-    print_every=10,
-):
+    print_every=1,
+):  
+    print(
+        "TODO: This is working, try to implement tracking stats (sometimes) and adjoint! Think about crashes if you have the time, ", 
+        "otherwise just save whatever progress you make"
+    )
     key = jrandom.PRNGKey(seed)
     _, model_key, l = jrandom.split(key, 3)
 
-    d = 10
-    hidden_size = 10
-    depth = 4
-    width_size = 32
+    d = 2 # dim(y) + 1 for time
+    hidden_size = 20
+    depth = 3
+    width_size = 48
+    init_depth = depth 
+    init_width = width_size
+    final_activation = lambda x: x
     if FUNC == 'PDEFunc':
-        # func = node.PDEFunc(d=d, width_size=width_size, depth=depth, integrate=False, skew=SKEW, seed=seed) # number of steps taken to solve is very important. Use more advanced method?
-        func = CDEPDEFunc(d=d, hidden_size=hidden_size, depth=depth, width_size=width_size, seed=seed)
+        func = CDEPDEFunc(d=d, hidden_size=hidden_size, depth=depth, width_size=width_size, seed=seed, final_activation=final_activation)
+        func.set_params(func.get_params()*1e-6)
     elif FUNC == 'RegularFunc':
-        # func = node.RegularFunc(d=d, width_size=width_size, depth=depth, seed=seed,)
-        func = CDERegularFunc(d=d, hidden_size=hidden_size, depth=depth, width_size=width_size, seed=seed, final_activation=jnn.tanh)
-        # model = node.NeuralODEClassifier(func, in_size=28*28, out_size=10, key=model_key, use_out=True)
+        func = CDERegularFunc(d=d, hidden_size=hidden_size, depth=depth, width_size=width_size, seed=seed, final_activation=final_activation)
     else:
         raise NotImplementedError
-    # model = node.NeuralODEClassifier(func, in_size=16000, out_size=1, key=model_key, use_out=True, activation=lambda x: x)
-    model = NeuralCDE(d, width_size, depth, hidden_size, func, key=model_key)
+    model = NeuralCDEClassifier(func=func, init_width=init_width, init_depth=init_depth, out_size=35, key=model_key)
     grad_tracker = StatTracker(['adjoint_norm'])
 
     validation_loss = []
 
-    assert False, 'inputs should be spline coefficients, now they are not!'
-
     @eqx.filter_value_and_grad
-    def grad_loss(model, ti, yi, labels):
-        y_pred = vmap(model, in_axes=(None, 0, None))(ti, yi, TRACK_STATS)
+    def grad_loss(model, ti, coeff_i, labels):
+        y_pred = vmap(model, in_axes=(0, 0))(ti, coeff_i)
         return _loss_func(labels, y_pred, model, lam=1e0)
 
     # @eqx.filter_jit
-    def make_step(ti, yi, model, opt_state, labels):
-        loss, grads = grad_loss(model, ti, yi, labels)
+    def make_step(ti, coeff_i, model, opt_state, labels):
+        loss, grads = grad_loss(model, ti, coeff_i, labels)
         updates, opt_state = optim.update(grads, opt_state) 
 
         if DO_BACKWARD: 
-            backward_pass = model.backward(ti, yi, _loss_func, labels)
+            backward_pass = model.backward(ti, coeff_i, _loss_func, labels)
             n_adj = backward_pass.ys.shape[-1] // 2
             adjoint = backward_pass.ys[:, :, :n_adj]
             adjoint_norm = jnp.linalg.norm(adjoint, axis=-1)
@@ -164,8 +169,14 @@ def main(
         return loss, model, opt_state
 
     def _loss_func(y, y_pred, model, lam=1e0):
-        loss = jnp.square(y - y_pred.reshape((-1, ))) 
-        return jnp.mean(loss) # + lam * jnp.mean(jnp.square(model.get_params()))
+        y = one_hot(y, 35)
+        loss = y * jnp.log(y_pred.reshape(y.shape) + 1e-6) + (1 - y) * jnp.log(1 - y_pred.reshape(y.shape) + 1e-6)
+        return -jnp.mean(loss) # + lam * jnp.mean(jnp.square(model.get_params()))
+
+    def make_coeff(t, y):
+        ys = jnp.concatenate([t[:, :, None], y[:, :, None]], axis=-1)  # time is a channel
+        coeffs = vmap(diffrax.backward_hermite_coefficients)(t, ys)
+        return coeffs
 
     for epoch in range(n_epochs):
         optim = optax.adabelief(lr)
@@ -176,14 +187,15 @@ def main(
         for step, item in zip( 
             range(steps), training_generator 
         ):
-            yi = np.concatenate([i.numpy() for i in item[0]])
-            labels = item[4]
-            #length = .5 + .5*int(epoch > 1)
             length = 1
+            yi = np.concatenate([i for i in item[0] if i.shape == item[0][0].shape])
+            _ts = jnp.broadcast_to(jnp.linspace(0, length, yi.shape[-1]), (yi.shape[0], yi.shape[-1], ))
+            coeff_i = make_coeff(_ts, yi)
+            labels = item[4][:yi.shape[0]]
+            #length = .5 + .5*int(epoch > 1)
             # _ts = jnp.array([0., length])
-            _ts = jnp.linspace(0., length, 100)
             start = time.time()
-            loss, model, opt_state = make_step(_ts, yi, model, opt_state, labels)
+            loss, model, opt_state = make_step(_ts, coeff_i, model, opt_state, labels)
             end = time.time()
             if (step % print_every) == 0 or step == steps - 1:
                 print(f"Step: {step}, Loss: {loss}, Computation time: {end - start}")
@@ -193,9 +205,11 @@ def main(
                 for step_, item in zip( 
                     range(1), training_generator 
                 ):
-                    test_input = np.concatenate([i.numpy() for i in item[0]])
+                    test_input = np.concatenate([i for i in item[0]])
+                    _ts = jnp.broadcast_to(jnp.linspace(0, length, test_input.shape[-1]), (test_input.shape[0], test_input.shape[-1], ))
+                    test_coeff = make_coeff(_ts, test_input)
                     test_output = item[4]
-                    preds = vmap(model, in_axes=(None, 0, None))(_ts, test_input, False)
+                    preds = vmap(model, in_axes=(0, 0))(_ts, test_coeff)
                     acc = _loss_func(test_output, preds, model)
                     print(f'Test loss: {acc}') 
                     validation_loss.append(acc)
