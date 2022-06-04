@@ -1,0 +1,115 @@
+import matplotlib.pyplot as plt 
+import joblib 
+import numpy as np 
+
+
+fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+
+folder1 = 'tests/pollution_RegularFunc_skew=True'# 'mnist_run_skew'# 'skew_integrate' # 'any_integrate' # 'skew_no_integral' # 
+folder2 = 'tests/pollution_PDEFunc_skew=True'# 'mnist_run_any'# 'PWConstFunc' # 'skew_integrate' #
+folders = [folder1, folder2]
+norms = [None, None]
+
+n_seeds = 10
+start = 1
+end = start + n_seeds
+step = (start - end) // n_seeds
+
+res = {folder1: None, folder2: None}
+samples = {folder1: [], folder2: []}
+
+n_times = 220 # 4 * 200
+
+# compute adjoint norm and variance
+for folder in folders:
+    mean_var = np.zeros((n_seeds, n_times))
+    for seed in range(start, end, step):
+        norm = joblib.load(f'tests/{folder}{seed}/adjoint_norm.pkl')
+        n_epochs = len(norm)
+        # take the mean over the batches
+        mean_var[seed, :n_epochs] = np.array([np.mean(np.quantile(a, axis=-1, q=.79)/np.quantile(a, axis=-1, q=.21)) for a in norm])
+        mean_var[seed, n_epochs:] = np.nan
+        samples[folder].append(np.array(norm[-1])) # keep trajectories of final state for later
+    res[folder] = mean_var
+
+colors = {folder1: 'purple', folder2: 'red'}
+
+for folder, values in res.items():
+    n_epochs = values.shape[-1]
+    epochs = np.arange(n_epochs)
+    mean = np.nanmedian(values, axis=0)
+    # std = np.nanstd(values, axis=0) # mean and std dev over seeds
+    # factor = 1
+    # upper = mean + factor*std
+    # lower = mean - factor*std
+    upper = np.nanquantile(values, q=.79, axis=0)
+    lower = np.nanquantile(values, q=.21, axis=0)
+    axs[0].plot(
+        epochs[:200], 
+        mean[:200],
+        label=folder, 
+    )
+    axs[0].fill_between(
+        epochs[:200], 
+        upper[:200],
+        lower[:200],
+        alpha=.4,
+        color=colors[folder],
+    )
+    
+    axs[1].plot(
+        epochs[200:], 
+        mean[200:],
+        label=folder, 
+    )
+    axs[1].fill_between(
+        epochs[200:], 
+        upper[200:],
+        lower[200:],
+        alpha=.4,
+        color=colors[folder],
+    )
+
+    used_samples = [s for s in samples[folder] if s.shape[-1] == 100]
+    sample = np.array(used_samples) # (seed, bs, ts)
+    # mean over batches
+    mean = np.mean(np.nanmedian(sample, axis=0), axis=0)
+    # std = np.mean(np.nanstd(sample, axis=0), axis=0)
+    # mean and uncertainty of adjoints for a particular epoch
+    upper = np.mean(np.quantile(sample, .79, axis=0), axis=0)
+    lower = np.mean(np.quantile(sample, .21, axis=0), axis=0)
+
+    times = np.arange(100)
+    axs[2].plot( 
+        times,
+        mean, 
+        label=folder,
+    )
+
+    axs[2].fill_between(
+        times, 
+        upper,
+        lower, 
+        alpha=.4,
+        color=colors[folder],
+    )
+axs[0].set_title('Adjoint norm')
+axs[0].set_xlabel('Epoch')
+
+axs[1].set_title('Adjoint norm')
+axs[1].set_xlabel('Epoch')
+
+axs[2].set_title('Final adjoint norm')
+axs[2].set_xlabel('Time')
+
+for ax in axs:
+    ax.legend()
+fig.tight_layout()
+
+plt.show()
+
+save = input('do you want to save? (yes/no)')
+if save == 'yes':
+    path = f'outputs/uncertainty_{folder1}_vs_{folder2}.pdf'
+    fig.savefig(path)
+    print(f'saved plot under {path}')
